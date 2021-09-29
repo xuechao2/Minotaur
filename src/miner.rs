@@ -157,7 +157,7 @@ impl Context {
             let mem_size = mem_snap.len(); 
             // info!("mem_size {}", mem_size);
 
-            if  mem_size >= txn_number {
+            if  mem_size >= txn_number && self.state.lock().unwrap().check_block(&parent) {
                 let txns = mem_snap.to_vec();
                 let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
                 let mut count_txn = 0;
@@ -221,21 +221,23 @@ impl Context {
                         let mem_size = mem_snap.len();
                         let txns = mem_snap.to_vec();
                         let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                        let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                        let mut invalid_txns = Vec::new();
-                        for txn in txns {
-                            let copy = txn.clone();
-                            let pubk = copy.sign.pubk.clone();
-                            let nonce = copy.transaction.nonce.clone();
-                            let value = copy.transaction.value.clone();
+                        if self.state.lock().unwrap().check_block(&temp_tip) {
+                            let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                            let mut invalid_txns = Vec::new();
+                            for txn in txns {
+                                let copy = txn.clone();
+                                let pubk = copy.sign.pubk.clone();
+                                let nonce = copy.transaction.nonce.clone();
+                                let value = copy.transaction.value.clone();
 
-                            let sender: H160 = compute_key_hash(pubk).into();
-                            let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                            if s_nonce >= nonce {
-                                invalid_txns.push(copy.clone());
+                                let sender: H160 = compute_key_hash(pubk).into();
+                                let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                                if s_nonce >= nonce {
+                                    invalid_txns.push(copy.clone());
+                                }
                             }
+                            self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
                         }
-                        self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
                         
                     } else {
                         // longest chain not change

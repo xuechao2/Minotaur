@@ -1,0 +1,2 @@
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/xuechao/Desktop/Research/Dual_Mode/Dual_consensus/Minotaur/target/release/build/typenum-fa3bdd92a2254aff/out/consts.rs
+cargo:rustc-env=TYPENUM_BUILD_OP=/Users/xuechao/Desktop/Research/Dual_Mode/Dual_consensus/Minotaur/target/release/build/typenum-fa3bdd92a2254aff/out/op.rs

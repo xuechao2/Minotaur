@@ -14,7 +14,7 @@ use std::fs;
 type state = HashMap<H160, (usize, usize)>;
 
 pub struct State {
-    state_per_block: HashMap<H256, state>,
+    pub state_per_block: HashMap<H256, state>,
 }
 
 pub fn file_to_vec(filename: String) -> io::Result<Vec<String>> {
@@ -120,6 +120,10 @@ impl State {
         for block in blocks {
             self.update_block(block);
         }
+    }
+
+    pub fn check_block(&mut self, hash: &H256) -> bool{
+        return self.state_per_block.contains_key(&hash);
     }
 
     pub fn one_block_state(&mut self, hash: &H256) -> state {

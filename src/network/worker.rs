@@ -158,7 +158,7 @@ impl Context {
                         let blk = queue.pop_front().unwrap();
                         let parent = blk.header.parent;
                         if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() {
-                            if self.blockchain.lock().unwrap().contains_hash(&parent) { //blockchain has the parent
+                            if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
 
                             	let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
                                 let txns = blk.content.data.clone();
@@ -207,21 +207,23 @@ impl Context {
 							            let mem_size = mem_snap.len();
 						                let txns = mem_snap.to_vec();
 						                let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                    					let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                    					let mut invalid_txns = Vec::new();
-						                for txn in txns {
-						                    let copy = txn.clone();
-					                        let pubk = copy.sign.pubk.clone();
-					                        let nonce = copy.transaction.nonce.clone();
-					                        let value = copy.transaction.value.clone();
+                                        if self.state.lock().unwrap().check_block(&temp_tip) {
+                        					let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                        					let mut invalid_txns = Vec::new();
+    						                for txn in txns {
+    						                    let copy = txn.clone();
+    					                        let pubk = copy.sign.pubk.clone();
+    					                        let nonce = copy.transaction.nonce.clone();
+    					                        let value = copy.transaction.value.clone();
 
-					                        let sender: H160 = compute_key_hash(pubk).into();
-					                        let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-					                        if s_nonce >= nonce {
-					                            invalid_txns.push(copy.clone());
-					                        }
-					                    }
-					                    self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+    					                        let sender: H160 = compute_key_hash(pubk).into();
+    					                        let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+    					                        if s_nonce >= nonce {
+    					                            invalid_txns.push(copy.clone());
+    					                        }
+    					                    }
+    					                    self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+                                        }
 							            
 
 
@@ -322,25 +324,27 @@ impl Context {
                 Message::Transactions(txns) => {
                     let mut hashes_send = vec![];
                     let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                    let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                    for txn in txns {
-                        if verify_signedtxn(&txn) {
-                            let copy = txn.clone();
-                            let pubk = copy.sign.pubk.clone();
-                            let nonce = copy.transaction.nonce.clone();
-                            let value = copy.transaction.value.clone();
+                    if self.state.lock().unwrap().check_block(&temp_tip) {
+                        let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                        for txn in txns {
+                            if verify_signedtxn(&txn) {
+                                let copy = txn.clone();
+                                let pubk = copy.sign.pubk.clone();
+                                let nonce = copy.transaction.nonce.clone();
+                                let value = copy.transaction.value.clone();
 
-                            let sender: H160 = compute_key_hash(pubk).into();
-                            let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                            if s_nonce < nonce {
-                                self.mempool.lock().unwrap().push(copy.clone());
+                                let sender: H160 = compute_key_hash(pubk).into();
+                                let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                                if s_nonce < nonce {
+                                    self.mempool.lock().unwrap().push(copy.clone());
+                                }
+                                self.all_txns.lock().unwrap().insert(txn.hash(), txn);
+                                // info!("Mempool size: {}", self.mempool.lock().unwrap().len());
+                                hashes_send.push(copy.clone().hash());
                             }
-                            self.all_txns.lock().unwrap().insert(txn.hash(), txn);
-                            // info!("Mempool size: {}", self.mempool.lock().unwrap().len());
-                            hashes_send.push(copy.clone().hash());
                         }
+                        self.server.broadcast(Message::NewTransactionHashes(hashes_send));
                     }
-                    self.server.broadcast(Message::NewTransactionHashes(hashes_send));
 
                 }
 
