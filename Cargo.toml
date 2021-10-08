@@ -24,6 +24,7 @@ clap = { version = "2.33", features = ["wrap_help"]}
 tari_mmr = "0.1.0"
 sha2 = "0.8.1"
 croaring = "0.3.9"
+vrf = "0.2.2"
 
 [features]
 default = []
