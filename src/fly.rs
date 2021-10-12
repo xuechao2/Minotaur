@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
-use crate::block::generate_block;
+//use crate::block::generate_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
 use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};

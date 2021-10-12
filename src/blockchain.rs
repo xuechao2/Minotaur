@@ -3,7 +3,7 @@ use crate::block::{Block,Header};
 use crate::crypto::hash::{H256,Hashable};
 use std::collections::{HashMap};
 use serde::{Serialize, Deserialize};
-use crate::block::generate_random_block;
+//use crate::block::generate_random_block;
 use log::{debug, warn,info};
 use tari_mmr::{MerkleMountainRange, MerkleProof, Hash};
 use sha2::{Digest, Sha256};
@@ -242,58 +242,58 @@ impl FlyClientProof {
 
 
 
-#[cfg(any(test, test_utilities))]
-mod tests {
-    use super::*;
-    use crate::block::test::generate_random_block;
-    use crate::crypto::hash::Hashable;
+// #[cfg(any(test, test_utilities))]
+// mod tests {
+//     use super::*;
+//     use crate::block::test::generate_random_block;
+//     use crate::crypto::hash::Hashable;
 
-    #[test]
-    fn blockchain_mmr_test() {
-        let mut blockchain = Blockchain::new();
-		let genesis_hash = blockchain.tip();
-		let genesis_mmr = blockchain.get_mmr(&genesis_hash);
-        let block = generate_random_block(&genesis_hash, &genesis_mmr);
-        blockchain.insert(&block);
-		assert_eq!(blockchain.tip(), block.hash());
-		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
-		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
-		assert!(MerkleProof::for_leaf_node(&tip_mmr, 0).is_ok());
-
-
-		let block_hash = blockchain.tip();
-		let block_mmr = blockchain.get_mmr(&block_hash);
-        let block1 = generate_random_block(&block_hash, &block_mmr);
-        blockchain.insert(&block1);
-		assert_eq!(blockchain.tip(), block1.hash());
-		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
-		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
-		assert!(MerkleProof::for_leaf_node(&tip_mmr, 1).is_ok());
+//     #[test]
+//     fn blockchain_mmr_test() {
+//         let mut blockchain = Blockchain::new();
+// 		let genesis_hash = blockchain.tip();
+// 		let genesis_mmr = blockchain.get_mmr(&genesis_hash);
+//         let block = generate_random_block(&genesis_hash, &genesis_mmr);
+//         blockchain.insert(&block);
+// 		assert_eq!(blockchain.tip(), block.hash());
+// 		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
+// 		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
+// 		assert!(MerkleProof::for_leaf_node(&tip_mmr, 0).is_ok());
 
 
-		let block1_hash = blockchain.tip();
-		let block1_mmr = blockchain.get_mmr(&block1_hash);
-        let block2 = generate_random_block(&block1_hash, &block1_mmr);
-        blockchain.insert(&block2);
-		assert_eq!(blockchain.tip(), block2.hash());
-		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
-		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
-		assert!(MerkleProof::for_leaf_node(&tip_mmr, 2).is_ok());
+// 		let block_hash = blockchain.tip();
+// 		let block_mmr = blockchain.get_mmr(&block_hash);
+//         let block1 = generate_random_block(&block_hash, &block_mmr);
+//         blockchain.insert(&block1);
+// 		assert_eq!(blockchain.tip(), block1.hash());
+// 		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
+// 		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
+// 		assert!(MerkleProof::for_leaf_node(&tip_mmr, 1).is_ok());
+
+
+// 		let block1_hash = blockchain.tip();
+// 		let block1_mmr = blockchain.get_mmr(&block1_hash);
+//         let block2 = generate_random_block(&block1_hash, &block1_mmr);
+//         blockchain.insert(&block2);
+// 		assert_eq!(blockchain.tip(), block2.hash());
+// 		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
+// 		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
+// 		assert!(MerkleProof::for_leaf_node(&tip_mmr, 2).is_ok());
 		
 		
-		let block2_hash = blockchain.tip();
-		let block2_mmr = blockchain.get_mmr(&block2_hash);
-        let block3 = generate_random_block(&block2_hash, &block2_mmr);
-        blockchain.insert(&block3);
-		assert_eq!(blockchain.tip(), block3.hash());
-		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
-		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
-		assert!(MerkleProof::for_leaf_node(&tip_mmr, 3).is_ok());
+// 		let block2_hash = blockchain.tip();
+// 		let block2_mmr = blockchain.get_mmr(&block2_hash);
+//         let block3 = generate_random_block(&block2_hash, &block2_mmr);
+//         blockchain.insert(&block3);
+// 		assert_eq!(blockchain.tip(), block3.hash());
+// 		let tip_mmr = blockchain.get_mmr(&blockchain.tip);
+// 		println!("{} {}", tip_mmr.get_leaf_count().unwrap(), tip_mmr.len().unwrap());
+// 		assert!(MerkleProof::for_leaf_node(&tip_mmr, 3).is_ok());
 
 
-		let proposal: FlyClientProposal = FlyClientProposal::new(&blockchain);
-		let query: FlyClientQuery = FlyClientQuery::new(proposal.chain_depth, vec![0]);
-		let proof: FlyClientProof = FlyClientProof::new(&blockchain, 0, query.query_depth);
-		assert!(proof.verify(proposal.header.mmr_root));
-    }
-}
+// 		let proposal: FlyClientProposal = FlyClientProposal::new(&blockchain);
+// 		let query: FlyClientQuery = FlyClientQuery::new(proposal.chain_depth, vec![0]);
+// 		let proof: FlyClientProof = FlyClientProof::new(&blockchain, 0, query.query_depth);
+// 		assert!(proof.verify(proposal.header.mmr_root));
+//     }
+// }

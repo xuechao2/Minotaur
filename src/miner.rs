@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
-use crate::block::generate_block;
+use crate::block::generate_pos_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
 use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};
@@ -19,6 +19,9 @@ use std::time;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::thread;
 use rand::Rng;
+
+use vrf::openssl::{CipherSuite, ECVRF};
+use vrf::VRF;   
 
 
 enum ControlSignal {
@@ -115,6 +118,11 @@ impl Context {
     fn miner_loop(&mut self) {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
+        let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+        // Inputs: Secret Key, Public Key (derived) & Message
+        let vrf_secret_key =
+            hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
+        let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
             // check and react to control signals
@@ -152,6 +160,13 @@ impl Context {
             let txn_number = 256;
             let mut enough_txn = false;
 
+            let mut transaction_ref = Default::default();
+            let message: &[u8] = b"sample";   //TODO: message --> ts||pk
+            // VRF proof and hash output
+            let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
+            let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+
+
 
             let mem_snap = self.mempool.lock().unwrap().clone();
             let mem_size = mem_snap.len(); 
@@ -176,7 +191,8 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_block(&data, &parent, rng.gen(), &difficulty, ts, &parent_mmr);
+                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                      &vrf_public_key);
                 if blk.hash() <= difficulty {
                     let copy = blk.clone();
                     count += 1;
