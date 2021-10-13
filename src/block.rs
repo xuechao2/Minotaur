@@ -28,6 +28,7 @@ pub struct Header {
     pub vrf_proof: Vec<u8>,
     pub vrf_hash: Vec<u8>,
     pub vrf_pub_key: Vec<u8>,
+    pub rand: u128,     // randomness for PoS leader election. TODO: update rand every epoch 
 }
 
 #[derive(Serialize, Deserialize, Debug,Hash, Eq, PartialEq,Clone)]
@@ -78,7 +79,7 @@ impl Block {
 
 pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
                       timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
-                      vrf_pub_key: &[u8]) -> Block {
+                      vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(data);
     let block_type = true; 
     let content = Content {
@@ -95,6 +96,7 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
         vrf_proof: vrf_proof.to_vec(),
         vrf_hash: vrf_hash.to_vec(),
         vrf_pub_key: vrf_pub_key.to_vec(),
+        rand: rand,
     };
     Block {
         header,
@@ -119,6 +121,7 @@ pub fn generate_genesis_block() -> Block {
         vrf_proof: Default::default(),
         vrf_hash: Default::default(),
         vrf_pub_key: Default::default(),
+        rand: Default::default(),
     };
     Block {
         header,

@@ -163,7 +163,9 @@ impl Context {
                     while !queue.is_empty() {
                         let blk = queue.pop_front().unwrap();
                         let parent = blk.header.parent;
-                        let message: &[u8] = b"sample";   //TODO: message --> ts||pk
+                        let ts_slice = blk.header.timestamp.to_be_bytes();
+                        let rand_slice = blk.header.rand.to_be_bytes();
+                        let message = [rand_slice,ts_slice].concat();
                         let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
                         let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
 
@@ -171,19 +173,20 @@ impl Context {
                             Ok(vrf_beta) => {
                                 if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() 
                                 && blk.header.vrf_hash == vrf_beta  {
-                                    if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
-                                        let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
+                                    //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
+                                        //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
+                                    if true{
                                         let txns = blk.content.data.clone();
                                         let mut valid = true;
-                                        for txn in txns {
-                                            if !transaction_check(&mut current_state,&txn) {
-                                                valid =false;
-                                            }
-                                        }
+                                        // for txn in txns {
+                                        //     if !transaction_check(&mut current_state,&txn) {
+                                        //         valid =false;
+                                        //     }
+                                        // }
                                         if valid {                            
                                             let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                                             if self.blockchain.lock().unwrap().insert(&blk) {
-                                                self.state.lock().unwrap().update_block(&blk);
+                                                //self.state.lock().unwrap().update_block(&blk);
                                                 // longest chain changes
                                                 // update the longest chain
                                                 let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
@@ -215,33 +218,33 @@ impl Context {
                                                 }
 
                                                 //clean up mempool
-                                                let mem_snap = self.mempool.lock().unwrap().clone();
-                                                let mem_size = mem_snap.len();
-                                                let txns = mem_snap.to_vec();
-                                                let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                                                if self.state.lock().unwrap().check_block(&temp_tip) {
-                                                    let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                                                    let mut invalid_txns = Vec::new();
-                                                    for txn in txns {
-                                                        let copy = txn.clone();
-                                                        let pubk = copy.sign.pubk.clone();
-                                                        let nonce = copy.transaction.nonce.clone();
-                                                        let value = copy.transaction.value.clone();
+                                                // let mem_snap = self.mempool.lock().unwrap().clone();
+                                                // let mem_size = mem_snap.len();
+                                                // let txns = mem_snap.to_vec();
+                                                // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
+                                                // if self.state.lock().unwrap().check_block(&temp_tip) {
+                                                //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                                                //     let mut invalid_txns = Vec::new();
+                                                //     for txn in txns {
+                                                //         let copy = txn.clone();
+                                                //         let pubk = copy.sign.pubk.clone();
+                                                //         let nonce = copy.transaction.nonce.clone();
+                                                //         let value = copy.transaction.value.clone();
 
-                                                        let sender: H160 = compute_key_hash(pubk).into();
-                                                        let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                                                        if s_nonce >= nonce {
-                                                            invalid_txns.push(copy.clone());
-                                                        }
-                                                    }
-                                                    self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
-                                                }
+                                                //         let sender: H160 = compute_key_hash(pubk).into();
+                                                //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                                                //         if s_nonce >= nonce {
+                                                //             invalid_txns.push(copy.clone());
+                                                //         }
+                                                //     }
+                                                //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+                                                // }
                                                 
 
 
                                             } else {
                                                 // longest chain not change
-                                                self.state.lock().unwrap().update_block(&blk);
+                                                //self.state.lock().unwrap().update_block(&blk);
                                                 // remove txns from mempool
                                                 //let txns = blk.content.data;
                                                 //self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
@@ -344,17 +347,18 @@ impl Context {
                     if self.state.lock().unwrap().check_block(&temp_tip) {
                         let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
                         for txn in txns {
-                            if verify_signedtxn(&txn) {
+                            //if verify_signedtxn(&txn) {
+                            if true {
                                 let copy = txn.clone();
-                                let pubk = copy.sign.pubk.clone();
-                                let nonce = copy.transaction.nonce.clone();
-                                let value = copy.transaction.value.clone();
+                                // let pubk = copy.sign.pubk.clone();
+                                // let nonce = copy.transaction.nonce.clone();
+                                // let value = copy.transaction.value.clone();
 
-                                let sender: H160 = compute_key_hash(pubk).into();
-                                let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                                if s_nonce < nonce {
-                                    self.mempool.lock().unwrap().push(copy.clone());
-                                }
+                                // let sender: H160 = compute_key_hash(pubk).into();
+                                // let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                                // if s_nonce < nonce {
+                                //     self.mempool.lock().unwrap().push(copy.clone());
+                                // }
                                 self.all_txns.lock().unwrap().insert(txn.hash(), txn);
                                 // info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                                 hashes_send.push(copy.clone().hash());

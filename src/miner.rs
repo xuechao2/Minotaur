@@ -161,7 +161,10 @@ impl Context {
             let mut enough_txn = false;
 
             let mut transaction_ref = Default::default();
-            let message: &[u8] = b"sample";   //TODO: message --> ts||pk
+            let rand: u128 = Default::default();  // TODO: update rand every epoch
+            let ts_slice = ts.to_be_bytes();
+            let rand_slice = rand.to_be_bytes();
+            let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
             let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
             let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
@@ -172,18 +175,19 @@ impl Context {
             let mem_size = mem_snap.len(); 
             // info!("mem_size {}", mem_size);
 
-            if  mem_size >= txn_number && self.state.lock().unwrap().check_block(&parent) {
+            //if  mem_size >= txn_number && self.state.lock().unwrap().check_block(&parent) {
+            if  mem_size >= txn_number { 
                 let txns = mem_snap.to_vec();
-                let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
+                //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
                 let mut count_txn = 0;
                 for txn in txns {
-                    if transaction_check(&mut current_state,&txn) {
-                        data.push(txn.clone());
-                        count_txn = count_txn + 1;
-                        if count_txn == txn_number {
-                            enough_txn = true;
-                            break;
-                        }
+                    //if transaction_check(&mut current_state,&txn) {
+                    data.push(txn.clone());
+                    count_txn = count_txn + 1;
+                    if count_txn == txn_number {
+                        enough_txn = true;
+                        break;
+                       // }
                     }
                 }
             }
@@ -192,7 +196,7 @@ impl Context {
                 // info!("Start mining!");
 
                 let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
-                      &vrf_public_key);
+                      &vrf_public_key, rand);
                 if blk.hash() <= difficulty {
                     let copy = blk.clone();
                     count += 1;
@@ -202,7 +206,7 @@ impl Context {
                     self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());
 
                     if self.blockchain.lock().unwrap().insert(&blk) {
-                        self.state.lock().unwrap().update_block(&blk);
+                        //self.state.lock().unwrap().update_block(&blk);
                         // longest chain changes
                         // update the longest chain
                         let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
@@ -233,31 +237,31 @@ impl Context {
                             self.mempool.lock().unwrap().extend(txns);
                         }
                         //clean up mempool
-                        let mem_snap = self.mempool.lock().unwrap().clone();
-                        let mem_size = mem_snap.len();
-                        let txns = mem_snap.to_vec();
-                        let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                        if self.state.lock().unwrap().check_block(&temp_tip) {
-                            let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                            let mut invalid_txns = Vec::new();
-                            for txn in txns {
-                                let copy = txn.clone();
-                                let pubk = copy.sign.pubk.clone();
-                                let nonce = copy.transaction.nonce.clone();
-                                let value = copy.transaction.value.clone();
+                        // let mem_snap = self.mempool.lock().unwrap().clone();
+                        // let mem_size = mem_snap.len();
+                        // let txns = mem_snap.to_vec();
+                        // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
+                        // if self.state.lock().unwrap().check_block(&temp_tip) {
+                        //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                        //     let mut invalid_txns = Vec::new();
+                        //     for txn in txns {
+                        //         let copy = txn.clone();
+                        //         let pubk = copy.sign.pubk.clone();
+                        //         let nonce = copy.transaction.nonce.clone();
+                        //         let value = copy.transaction.value.clone();
 
-                                let sender: H160 = compute_key_hash(pubk).into();
-                                let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                                if s_nonce >= nonce {
-                                    invalid_txns.push(copy.clone());
-                                }
-                            }
-                            self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
-                        }
+                        //         let sender: H160 = compute_key_hash(pubk).into();
+                        //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                        //         if s_nonce >= nonce {
+                        //             invalid_txns.push(copy.clone());
+                        //         }
+                        //     }
+                        //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+                        // }
                         
                     } else {
                         // longest chain not change
-                        self.state.lock().unwrap().update_block(&blk);
+                        //self.state.lock().unwrap().update_block(&blk);
                         // add txns back to the mempool
                         //let txns = blk.content.data.clone();
                         //self.mempool.lock().unwrap().extend(txns);
