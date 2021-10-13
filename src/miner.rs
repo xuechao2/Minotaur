@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
-use crate::block::generate_pos_block;
+use crate::block::generate_pow_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
 use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};
@@ -44,6 +44,7 @@ pub struct Context {
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     state: Arc<Mutex<State>>,
     all_blocks: Arc<Mutex<HashMap<H256,Block>>>,
+    tranpool: Arc<Mutex<Vec<H256>>>,
 }
 
 #[derive(Clone)]
@@ -58,6 +59,7 @@ pub fn new(
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
     all_blocks: &Arc<Mutex<HashMap<H256,Block>>>,
+    tranpool: &Arc<Mutex<Vec<H256>>>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -69,6 +71,7 @@ pub fn new(
         mempool: Arc::clone(mempool),
         state: Arc::clone(state),
         all_blocks: Arc::clone(all_blocks),
+        tranpool: Arc::clone(tranpool),
     };
 
     let handle = Handle {
@@ -119,9 +122,9 @@ impl Context {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
-        // Inputs: Secret Key, Public Key (derived) & Message
+        //Inputs: Secret Key, Public Key (derived) & Message
         let vrf_secret_key =
-            hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
+           hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
@@ -150,24 +153,24 @@ impl Context {
             // TODO: actual mining
 
 
-            let parent = self.blockchain.lock().unwrap().tip();
+            let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
             let difficulty = self.blockchain.lock().unwrap().get_difficulty();
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Vec::new();
+            let mut transaction_ref: Vec<H256> = Default::default();
             // add txns from mempool to from a block
             let txn_number = 256;
             let mut enough_txn = false;
 
-            let mut transaction_ref = Default::default();
             let rand: u128 = Default::default();  // TODO: update rand every epoch
-            let ts_slice = ts.to_be_bytes();
-            let rand_slice = rand.to_be_bytes();
-            let message = [rand_slice,ts_slice].concat();
+            //let ts_slice = ts.to_be_bytes();
+            //let rand_slice = rand.to_be_bytes();
+            //let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
-            let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
-            let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+            let vrf_proof = Default::default();
+            let vrf_hash = Default::default();
 
 
 
@@ -195,81 +198,89 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
                       &vrf_public_key, rand);
                 if blk.hash() <= difficulty {
+                    self.blockchain.lock().unwrap().insert_pow(&blk);
                     let copy = blk.clone();
                     count += 1;
-                    info!("Mined {} block!", count);
-                    let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                    info!("Mined {} PoW blocks!", count);
+
+                    let txns = blk.content.data.clone();
+                    let hash = blk.hash().clone();
+                    self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                    if !self.tranpool.lock().unwrap().contains(&hash) {
+                        self.tranpool.lock().unwrap().push(hash);
+                    }
+                    // let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
 
                     self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());
 
-                    if self.blockchain.lock().unwrap().insert(&blk) {
-                        //self.state.lock().unwrap().update_block(&blk);
-                        // longest chain changes
-                        // update the longest chain
-                        let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                        longest_chain.reverse();
-                        // remove the common prefix
-                        while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
-                            last_longest_chain.remove(0);
-                            longest_chain.remove(0);
-                        }
-                        let mut blocks = Vec::new();
-                        // update the state
-                        for blk_hash in longest_chain {
-                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                            blocks.push(block);
-                        }
-                        // self.state.lock().unwrap().update_blocks(&blocks);
+                    // if self.blockchain.lock().unwrap().insert(&blk) {
+                    //     //self.state.lock().unwrap().update_block(&blk);
+                    //     // longest chain changes
+                    //     // update the longest chain
+                    //     let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                    //     longest_chain.reverse();
+                    //     // remove the common prefix
+                    //     while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
+                    //         last_longest_chain.remove(0);
+                    //         longest_chain.remove(0);
+                    //     }
+                    //     let mut blocks = Vec::new();
+                    //     // update the state
+                    //     for blk_hash in longest_chain {
+                    //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                    //         blocks.push(block);
+                    //     }
+                    //     // self.state.lock().unwrap().update_blocks(&blocks);
                         
-                        // remove txns from mempool
-                        for b in blocks {
-                            let txns = b.content.data;
-                            self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                        }
+                    //     // remove txns from mempool
+                    //     for b in blocks {
+                    //         let txns = b.content.data;
+                    //         self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                    //     }
 
-                        // add txns back to the mempool
-                        for blk_hash in last_longest_chain {
-                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                            let txns = block.content.data.clone();
-                            self.mempool.lock().unwrap().extend(txns);
-                        }
-                        //clean up mempool
-                        // let mem_snap = self.mempool.lock().unwrap().clone();
-                        // let mem_size = mem_snap.len();
-                        // let txns = mem_snap.to_vec();
-                        // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                        // if self.state.lock().unwrap().check_block(&temp_tip) {
-                        //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                        //     let mut invalid_txns = Vec::new();
-                        //     for txn in txns {
-                        //         let copy = txn.clone();
-                        //         let pubk = copy.sign.pubk.clone();
-                        //         let nonce = copy.transaction.nonce.clone();
-                        //         let value = copy.transaction.value.clone();
+                    //     // add txns back to the mempool
+                    //     for blk_hash in last_longest_chain {
+                    //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                    //         let txns = block.content.data.clone();
+                    //         self.mempool.lock().unwrap().extend(txns);
+                    //     }
+                    //     //clean up mempool
+                    //     // let mem_snap = self.mempool.lock().unwrap().clone();
+                    //     // let mem_size = mem_snap.len();
+                    //     // let txns = mem_snap.to_vec();
+                    //     // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
+                    //     // if self.state.lock().unwrap().check_block(&temp_tip) {
+                    //     //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                    //     //     let mut invalid_txns = Vec::new();
+                    //     //     for txn in txns {
+                    //     //         let copy = txn.clone();
+                    //     //         let pubk = copy.sign.pubk.clone();
+                    //     //         let nonce = copy.transaction.nonce.clone();
+                    //     //         let value = copy.transaction.value.clone();
 
-                        //         let sender: H160 = compute_key_hash(pubk).into();
-                        //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                        //         if s_nonce >= nonce {
-                        //             invalid_txns.push(copy.clone());
-                        //         }
-                        //     }
-                        //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
-                        // }
+                    //     //         let sender: H160 = compute_key_hash(pubk).into();
+                    //     //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                    //     //         if s_nonce >= nonce {
+                    //     //             invalid_txns.push(copy.clone());
+                    //     //         }
+                    //     //     }
+                    //     //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+                    //     // }
                         
-                    } else {
-                        // longest chain not change
-                        //self.state.lock().unwrap().update_block(&blk);
-                        // add txns back to the mempool
-                        //let txns = blk.content.data.clone();
-                        //self.mempool.lock().unwrap().extend(txns);
-                    }
+                    // } else {
+                    //     // longest chain not change
+                    //     //self.state.lock().unwrap().update_block(&blk);
+                    //     // add txns back to the mempool
+                    //     //let txns = blk.content.data.clone();
+                    //     //self.mempool.lock().unwrap().extend(txns);
+                    // }
 
                     // copy.print_txns();
-                    info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
-                    info!("Total Number of Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_size());
+                    //info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                    info!("Total Number of PoW Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pow());
                     // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
                     let last_block = self.blockchain.lock().unwrap().tip();                    
                     info!("Mempool size: {}", self.mempool.lock().unwrap().len());

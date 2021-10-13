@@ -80,8 +80,36 @@ impl Block {
 pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
                       timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
-    let mt: MerkleTree = MerkleTree::new(data);
+    let mt: MerkleTree = MerkleTree::new(transaction_ref);
     let block_type = true; 
+    let content = Content {
+        data: data.to_vec(),
+        transaction_ref: transaction_ref.to_vec()
+    };
+    let header = Header {
+        parent: *parent,
+        nonce: nonce,
+        difficulty: *difficulty, 
+        timestamp: timestamp,
+        merkle_root: mt.root(),
+        mmr_root: parent_mmr.get_merkle_root().unwrap(),
+        vrf_proof: vrf_proof.to_vec(),
+        vrf_hash: vrf_hash.to_vec(),
+        vrf_pub_key: vrf_pub_key.to_vec(),
+        rand: rand,
+    };
+    Block {
+        header,
+        content,
+        block_type
+   }
+}
+
+pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
+                      timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
+                      vrf_pub_key: &[u8], rand: u128) -> Block {
+    let mt: MerkleTree = MerkleTree::new(data);
+    let block_type = false; 
     let content = Content {
         data: data.to_vec(),
         transaction_ref: transaction_ref.to_vec()

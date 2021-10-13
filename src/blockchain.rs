@@ -19,6 +19,8 @@ pub struct Blockchain {
 	map: HashMap<H256,MerkleMountainRange<Sha256, Vec<Hash>>>,
     tip: H256,
     depth: u128,
+    num_pos: u128,
+    num_pow: u128,
 }
 
 impl Blockchain {
@@ -34,12 +36,12 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0}
+		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0}
 	
     }
 
-    /// Insert a block into blockchain
-    pub fn insert(&mut self, block: &Block) -> bool {
+    /// Insert a PoS block into blockchain
+    pub fn insert_pos(&mut self, block: &Block) -> bool {
 		//unimplemented!()
 		if self.chain.contains_key(&block.hash()) {
 			return false;
@@ -59,12 +61,39 @@ impl Blockchain {
 		mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
 		self.chain.insert(newhash,newdata);
 		self.map.insert(newhash, new_mmr);
+		self.num_pos = self.num_pos + 1;
 		if newheight > self.depth {
 			self.depth = newheight;
 			self.tip = newhash;
 			return true;
 		} 
 		return false;
+    }
+
+    /// Insert a PoW block into blockchain
+    pub fn insert_pow(&mut self, block: &Block) -> bool {
+		//unimplemented!()
+		if self.chain.contains_key(&block.hash()) {
+			return false;
+		}
+		let header:Header = block.header.clone();
+		let parenthash: H256 = header.parent;
+		let parentdata: Data;
+		match self.chain.get(&parenthash) {
+			Some(data) => parentdata = data.clone(),
+			None => return false,
+		}
+		let parentheight = parentdata.height;
+		let newheight = parentheight+1;
+		let newdata = Data{blk:block.clone(),height:newheight};
+		let newhash = block.hash();
+		let mut new_mmr = self.get_mmr(&parenthash);
+		mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
+		self.chain.insert(newhash,newdata);
+		self.map.insert(newhash, new_mmr);
+		self.num_pow = self.num_pow + 1;
+
+		return true;
     }
 
     /// Get the last block's hash of the longest chain
@@ -79,6 +108,14 @@ impl Blockchain {
 	
 	pub fn get_depth(&self) -> u128 {
 		self.depth
+	}
+
+	pub fn get_num_pos(&self) -> u128 {
+		self.num_pos
+	}
+
+	pub fn get_num_pow(&self) -> u128 {
+		self.num_pow
 	}
 
 	pub fn get_size(&self) -> usize {

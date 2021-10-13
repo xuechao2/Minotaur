@@ -7,6 +7,7 @@ pub mod block;
 pub mod blockchain;
 pub mod crypto;
 pub mod miner;
+pub mod staker;
 pub mod spv;
 pub mod fly;
 pub mod network;
@@ -114,6 +115,7 @@ fn main() {
     let mut all_blocks = HashMap::new();
     let mut delays = Vec::new();
     let mut mempool = Vec::new();
+    let mut tranpool = Vec::new();
     let mut all_txns = HashMap::new();
     let mut state = state::State::new();
     let blockchain = Arc::new(std::sync::Mutex::new(blockchain));
@@ -121,18 +123,19 @@ fn main() {
     let all_blocks = Arc::new(std::sync::Mutex::new(all_blocks));
     let delays = Arc::new(std::sync::Mutex::new(delays));
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
+    let tranpool = Arc::new(std::sync::Mutex::new(tranpool));
     let all_txns = Arc::new(std::sync::Mutex::new(all_txns));
 
     // ico 
-    let ico_account_number = 900;
-    let keypairs = state::create_ico_keys(ico_account_number);
-    let accounts = state::create_ico_accounts(keypairs);
-    let amount = 10000;
+    // let ico_account_number = 900;
+    // let keypairs = state::create_ico_keys(ico_account_number);
+    // let accounts = state::create_ico_accounts(keypairs);
+    // let amount = 10000;
     //let genesis_block = block::generate_genesis_block();
-    let genesis_block_hash = blockchain.lock().unwrap().tip();
-    state.ico(genesis_block_hash, &accounts, amount);
-    info!("***** State After ICO *****");
-    state.print_last_block_state(&genesis_block_hash);
+    //let genesis_block_hash = blockchain.lock().unwrap().tip();
+    //state.ico(genesis_block_hash, &accounts, amount);
+    //info!("***** State After ICO *****");
+    ///state.print_last_block_state(&genesis_block_hash);
     info!("***************************");
     
 
@@ -184,6 +187,7 @@ fn main() {
             &mempool,
             &all_txns,
             &state,
+            &tranpool,
         );
         worker_ctx.start();
     }
@@ -196,7 +200,7 @@ fn main() {
         &all_txns,
         &state,
         //&keypairs,
-        &accounts,
+        //&accounts,
     );
     txgenerator_ctx.start();
 
@@ -206,8 +210,19 @@ fn main() {
         &mempool,
         &state,
         &all_blocks,
+        &tranpool,
     );
     miner_ctx.start();
+
+    // start the staker
+    let (staker_ctx, staker) = staker::new(
+        &blockchain, &server,
+        //&mempool,
+        &state,
+        &all_blocks,
+        &tranpool,
+    );
+    staker_ctx.start();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -247,6 +262,7 @@ fn main() {
     ApiServer::start(
         api_addr,
         &miner,
+        &staker,
         &txgenerator,
         &server,
         &spv,

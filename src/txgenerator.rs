@@ -51,7 +51,7 @@ pub struct Context {
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: Arc<Mutex<State>>,
     //key_pairs: Vec<Ed25519KeyPair>,
-    accounts: Vec<H160>,
+    //accounts: Vec<H160>,
 }
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ pub fn new(
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
     //key_pairs: &Vec<Ed25519KeyPair>,
-    accounts: &Vec<H160>,
+    //accounts: &Vec<H160>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -80,7 +80,7 @@ pub fn new(
         all_txns: Arc::clone(all_txns),
         state: Arc::clone(state),
         //key_pairs: key_pairs.clone(),
-        accounts: accounts.clone(),
+        //accounts: accounts.clone(),
     };
 
     let handle = Handle {
@@ -130,9 +130,9 @@ impl Context {
 
 
     fn generator_loop(&mut self) {
-        let account_number = self.accounts.len();
+        //let account_number = self.accounts.len();
         let start: time::SystemTime = SystemTime::now();
-        let keypairs = create_ico_keys(account_number);
+        //let keypairs = create_ico_keys(account_number);
         // main mining loop
         loop {
             // check and react to control signals

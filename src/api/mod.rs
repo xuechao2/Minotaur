@@ -1,5 +1,6 @@
 use serde::Serialize;
 use crate::miner::Handle as MinerHandle;
+use crate::staker::Handle as StakerHandle;
 use crate::spv::Handle as SPVHandle;
 use crate::fly::Handle as FlyHandle;
 use crate::txgenerator::Handle as TxgeneratorHandle;
@@ -17,6 +18,7 @@ use url::Url;
 pub struct Server {
     handle: HTTPServer,
     miner: MinerHandle,
+    staker: StakerHandle,
     txgenerator: TxgeneratorHandle,
     network: NetworkServerHandle,
     spv: SPVHandle,
@@ -46,6 +48,7 @@ impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
         miner: &MinerHandle,
+        staker: &StakerHandle,
         txgenerator: &TxgeneratorHandle,
         network: &NetworkServerHandle,
         spv: &SPVHandle,
@@ -55,6 +58,7 @@ impl Server {
         let server = Self {
             handle,
             miner: miner.clone(),
+            staker: staker.clone(),
             txgenerator: txgenerator.clone(),
             network: network.clone(),
             spv: spv.clone(),
@@ -63,6 +67,7 @@ impl Server {
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
                 let miner = server.miner.clone();
+                let staker = server.staker.clone();
                 let txgenerator = server.txgenerator.clone();
                 let network = server.network.clone();
                 let spv = server.spv.clone();
@@ -100,6 +105,30 @@ impl Server {
                                 }
                             };
                             miner.start(lambda);
+                            respond_result!(req, true, "ok");
+                        }
+                        "/staker/start" => {
+                            let params = url.query_pairs();
+                            let params: HashMap<_, _> = params.into_owned().collect();
+                            let zeta = match params.get("zeta") {
+                                Some(v) => v,
+                                None => {
+                                    respond_result!(req, false, "missing zeta");
+                                    return;
+                                }
+                            };
+                            let zeta = match zeta.parse::<u64>() {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    respond_result!(
+                                        req,
+                                        false,
+                                        format!("error parsing zeta: {}", e)
+                                    );
+                                    return;
+                                }
+                            };
+                            staker.start(zeta);
                             respond_result!(req, true, "ok");
                         }
                         "/spv/start" => {
