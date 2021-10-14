@@ -45,6 +45,8 @@ pub struct Context {
     state: Arc<Mutex<State>>,
     all_blocks: Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: Arc<Mutex<Vec<H256>>>,
+    vrf_secret_key: Vec<u8>,
+    vrf_public_key: Vec<u8>,
 }
 
 #[derive(Clone)]
@@ -60,6 +62,8 @@ pub fn new(
     state: &Arc<Mutex<State>>,
     all_blocks: &Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
+    vrf_secret_key: &Vec<u8>,
+    vrf_public_key: &Vec<u8>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -72,6 +76,8 @@ pub fn new(
         state: Arc::clone(state),
         all_blocks: Arc::clone(all_blocks),
         tranpool: Arc::clone(tranpool),
+        vrf_secret_key: vrf_secret_key.clone(),
+        vrf_public_key: vrf_public_key.clone(),
     };
 
     let handle = Handle {
@@ -122,10 +128,10 @@ impl Context {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
-        //Inputs: Secret Key, Public Key (derived) & Message
-        let vrf_secret_key =
-           hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
-        let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+        // //Inputs: Secret Key, Public Key (derived) & Message
+        // let vrf_secret_key =
+        //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
+        // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
             // check and react to control signals
@@ -200,7 +206,7 @@ impl Context {
                 // info!("Start mining!");
 
                 let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
-                      &vrf_public_key, rand);
+                      &self.vrf_public_key, rand);
                 if blk.hash() <= pow_difficulty {
                     self.blockchain.lock().unwrap().insert_pow(&blk);
                     let copy = blk.clone();

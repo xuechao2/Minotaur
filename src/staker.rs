@@ -46,6 +46,8 @@ pub struct Context {
     state: Arc<Mutex<State>>,
     all_blocks: Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: Arc<Mutex<Vec<H256>>>,              //Pool of hash of transaction blocks that are not included yet
+    vrf_secret_key: Vec<u8>,
+    vrf_public_key: Vec<u8>,
 }
 
 #[derive(Clone)]
@@ -61,6 +63,8 @@ pub fn new(
     state: &Arc<Mutex<State>>,
     all_blocks: &Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
+    vrf_secret_key: &Vec<u8>,
+    vrf_public_key: &Vec<u8>,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -73,6 +77,8 @@ pub fn new(
         state: Arc::clone(state),
         all_blocks: Arc::clone(all_blocks),
         tranpool: Arc::clone(tranpool),
+        vrf_secret_key: vrf_secret_key.clone(),
+        vrf_public_key: vrf_public_key.clone(),
     };
 
     let handle = Handle {
@@ -123,10 +129,10 @@ impl Context {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
-        // Inputs: Secret Key, Public Key (derived) & Message
-        let vrf_secret_key =
-            hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();   //TODO: use different vrf key pairs in different nodes
-        let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+        // // Inputs: Secret Key, Public Key (derived) & Message
+        // let vrf_secret_key =
+        //     hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();   //TODO: use different vrf key pairs in different nodes
+        // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
             // check and react to control signals
@@ -171,7 +177,7 @@ impl Context {
             let rand_slice = rand.to_be_bytes();
             let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
-            let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
+            let vrf_proof = vrf.prove(&self.vrf_secret_key, &message).unwrap();
             let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
 
 
@@ -201,7 +207,7 @@ impl Context {
                 // info!("Start mining!");
 
                 let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
-                      &vrf_public_key, rand);
+                      &self.vrf_public_key, rand);
                 let vrf_hash_bytes: &[u8] = &vrf_hash;
                 let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
                 //info!("Vrf: {}",vrf_hash_sha256);

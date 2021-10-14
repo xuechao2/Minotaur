@@ -31,6 +31,9 @@ use std::time;
 use crate::crypto::hash::H160;
 use ring::signature::Ed25519KeyPair;
 
+use vrf::openssl::{CipherSuite, ECVRF};
+use vrf::VRF;  
+
 
 
 fn main() {
@@ -45,8 +48,14 @@ fn main() {
      (@arg p2p_workers: --("p2p-workers") [INT] default_value("4") "Sets the number of worker threads for P2P server")
      (@arg spv_client: --spv [BOOL] default_value("false") "Whether spv client or full node") // false for full node, true for spv client
      (@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
+     (@arg vrf_secret_key: --sk [String] "Secret key to be used to print or validate proof" )
     )
     .get_matches();
+
+    let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+    // Inputs: Secret Key, Public Key (derived) & Message
+    let vrf_secret_key = hex::decode(&matches.value_of("vrf_secret_key").unwrap()).unwrap();
+    let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
 
     let spv_client = matches
         .value_of("spv_client")
@@ -211,6 +220,8 @@ fn main() {
         &state,
         &all_blocks,
         &tranpool,
+        &vrf_secret_key,
+        &vrf_public_key,
     );
     miner_ctx.start();
 
@@ -221,6 +232,8 @@ fn main() {
         &state,
         &all_blocks,
         &tranpool,
+        &vrf_secret_key,
+        &vrf_public_key,
     );
     staker_ctx.start();
 
