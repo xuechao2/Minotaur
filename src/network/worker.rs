@@ -176,7 +176,9 @@ impl Context {
 
                             match vrf_beta {
                                 Ok(vrf_beta) => {
-                                    if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() 
+                                    let vrf_hash_bytes: &[u8] = &blk.header.vrf_hash;
+                                    let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
+                                    if vrf_hash_sha256 <= blk.header.pos_difficulty && blk.header.pos_difficulty == self.blockchain.lock().unwrap().get_pos_difficulty() 
                                     && blk.header.vrf_hash == vrf_beta  {
                                         //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
                                             //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
@@ -253,37 +255,39 @@ impl Context {
                                 }
                             }
                         } else {
-                            if self.blockchain.lock().unwrap().contains_hash(&parent) {
-                                self.blockchain.lock().unwrap().insert_pow(&blk);
-                                let txns = blk.content.data.clone();
-                                let hash = blk.hash().clone();
-                                self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                if !self.tranpool.lock().unwrap().contains(&hash){
-                                    self.tranpool.lock().unwrap().push(hash);
-                                }
-
-                            } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
-                                let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
-                                self.buffer.lock().unwrap().remove(&parent);
-                                queue.push_back(parent_blk);
-                                queue.push_back(blk);
-                            } else {
-                                let mut flag = false;
-                                for i in 0..queue.len() {
-                                    let block = queue.get(i).unwrap();
-                                    if block.header.hash() == parent {
-                                        flag = true;
-                                        break;
+                            if blk.hash() <= blk.header.pow_difficulty && blk.header.pow_difficulty == self.blockchain.lock().unwrap().get_pow_difficulty() {
+                                if self.blockchain.lock().unwrap().contains_hash(&parent) {
+                                    self.blockchain.lock().unwrap().insert_pow(&blk);
+                                    let txns = blk.content.data.clone();
+                                    let hash = blk.hash().clone();
+                                    self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                                    if !self.tranpool.lock().unwrap().contains(&hash){
+                                        self.tranpool.lock().unwrap().push(hash);
                                     }
-                                }
-                                // if queue contains the parent
-                                if flag {
+
+                                } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
+                                    let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
+                                    self.buffer.lock().unwrap().remove(&parent);
+                                    queue.push_back(parent_blk);
                                     queue.push_back(blk);
                                 } else {
-                                    if !hashes_request.contains(&blk.header.parent) {
-                                        hashes_request.push(blk.header.parent);
+                                    let mut flag = false;
+                                    for i in 0..queue.len() {
+                                        let block = queue.get(i).unwrap();
+                                        if block.header.hash() == parent {
+                                            flag = true;
+                                            break;
+                                        }
                                     }
-                                    self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                    // if queue contains the parent
+                                    if flag {
+                                        queue.push_back(blk);
+                                    } else {
+                                        if !hashes_request.contains(&blk.header.parent) {
+                                            hashes_request.push(blk.header.parent);
+                                        }
+                                        self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                    }
                                 }
                             }
                         }

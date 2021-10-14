@@ -154,7 +154,8 @@ impl Context {
 
 
             let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
-            let difficulty = self.blockchain.lock().unwrap().get_difficulty();
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty();
+            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
@@ -198,9 +199,9 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
                       &vrf_public_key, rand);
-                if blk.hash() <= difficulty {
+                if blk.hash() <= pow_difficulty {
                     self.blockchain.lock().unwrap().insert_pow(&blk);
                     let copy = blk.clone();
                     count += 1;
@@ -298,7 +299,7 @@ impl Context {
                 }
             }
             if count == 100000 {
-                info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
+                info!("pow_difficulty {}", self.blockchain.lock().unwrap().get_pow_difficulty());
                 let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
                 info!("{} seconds elapsed", time);
                 let rate = 100000/time;

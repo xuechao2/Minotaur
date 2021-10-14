@@ -21,7 +21,8 @@ pub struct Block {
 pub struct Header {
     pub parent: H256,
     pub nonce: u32,
-    pub difficulty: H256,
+    pub pow_difficulty: H256,
+    pub pos_difficulty: H256,
     pub timestamp: u128,  // TODO: use current time
     pub merkle_root: H256,
     pub mmr_root: Hash,  //ignore this for now
@@ -77,7 +78,7 @@ impl Block {
 
 
 
-pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
+pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, pow_difficulty: &H256, pos_difficulty: &H256,
                       timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(transaction_ref);
@@ -89,7 +90,8 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
     let header = Header {
         parent: *parent,
         nonce: nonce,
-        difficulty: *difficulty, 
+        pow_difficulty: *pow_difficulty, 
+        pos_difficulty: *pos_difficulty, 
         timestamp: timestamp,
         merkle_root: mt.root(),
         mmr_root: parent_mmr.get_merkle_root().unwrap(),
@@ -105,7 +107,7 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
    }
 }
 
-pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
+pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, pow_difficulty: &H256, pos_difficulty: &H256, 
                       timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(data);
@@ -117,7 +119,8 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
     let header = Header {
         parent: *parent,
         nonce: nonce,
-        difficulty: *difficulty, 
+        pow_difficulty: *pow_difficulty, 
+        pos_difficulty: *pos_difficulty,
         timestamp: timestamp,
         merkle_root: mt.root(),
         mmr_root: parent_mmr.get_merkle_root().unwrap(),
@@ -142,7 +145,8 @@ pub fn generate_genesis_block() -> Block {
     let header = Header {
         parent: Default::default(),
         nonce: Default::default(),
-        difficulty: <H256>::from([1; 32]), 
+        pow_difficulty: <H256>::from([1; 32]), 
+        pos_difficulty: <H256>::from([1; 32]), 
         timestamp: Default::default(),
         merkle_root: Default::default(),
         mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),

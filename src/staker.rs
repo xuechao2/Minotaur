@@ -11,6 +11,7 @@ use crate::blockchain::Blockchain;
 use crate::network::message::Message;
 use crate::state::{State,transaction_check,compute_key_hash};
 
+
 use log::info;
 use std::sync::{Arc, Mutex};
 
@@ -154,7 +155,8 @@ impl Context {
 
 
             let parent = self.blockchain.lock().unwrap().tip();
-            let difficulty = self.blockchain.lock().unwrap().get_difficulty();
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty();
+            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
@@ -195,12 +197,16 @@ impl Context {
                 }
             }
 
-            while enough_txn_block {
+            if enough_txn_block {
                 // info!("Start mining!");
 
-                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
                       &vrf_public_key, rand);
-                if blk.hash() <= difficulty {    //TODO: change to PoS mining
+                let vrf_hash_bytes: &[u8] = &vrf_hash;
+                let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
+                //info!("Vrf: {}",vrf_hash_sha256);
+                //info!("Target: {}",pos_difficulty);
+                if vrf_hash_sha256 <= pos_difficulty {    //TODO: change to PoS mining
                     let copy = blk.clone();
                     count += 1;
                     info!("Mined {} PoS blocks!", count);
@@ -285,7 +291,7 @@ impl Context {
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     self.blockchain.lock().unwrap().print_longest_chain();
                     self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
-                    break;
+                    //break;
                 }
             }
 
@@ -296,7 +302,7 @@ impl Context {
                 }
             }
             if count == 100000 {
-                info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
+                info!("pos_difficulty {}", self.blockchain.lock().unwrap().get_pos_difficulty());
                 let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
                 info!("{} seconds elapsed", time);
                 let rate = 100000/time;

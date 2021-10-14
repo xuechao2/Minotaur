@@ -102,8 +102,12 @@ impl Blockchain {
 		self.tip
 	}
 	
-	pub fn get_difficulty(&self) -> H256 {
-		self.chain.get(&self.tip).unwrap().blk.header.difficulty
+	pub fn get_pow_difficulty(&self) -> H256 {
+		self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty
+	}
+
+	pub fn get_pos_difficulty(&self) -> H256 {
+		self.chain.get(&self.tip).unwrap().blk.header.pos_difficulty
 	}
 	
 	pub fn get_depth(&self) -> u128 {
