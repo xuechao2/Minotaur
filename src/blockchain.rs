@@ -25,9 +25,10 @@ pub struct Blockchain {
 
 impl Blockchain {
     /// Create a new blockchain, only containing the genesis block
-    pub fn new() -> Self {
+    pub fn new(initial_time:u128) -> Self {
         //unimplemented!()
-		let genesis = generate_genesis_block();
+		let genesis = generate_genesis_block(initial_time);
+		info!("Timestamp of the genesis block: {}", genesis.header.timestamp);
 		let blockinfo = Data{blk:genesis.clone(),height:0}; 
 		let hash: H256 = genesis.clone().hash();
 		let mut chain = HashMap::new();

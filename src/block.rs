@@ -136,7 +136,7 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
    }
 }
 
-pub fn generate_genesis_block() -> Block {
+pub fn generate_genesis_block(initial_time:u128) -> Block {
     let content = Content {
         data: Default::default(),
         transaction_ref: Default::default(),
@@ -147,7 +147,7 @@ pub fn generate_genesis_block() -> Block {
         nonce: Default::default(),
         pow_difficulty: <H256>::from([1; 32]), 
         pos_difficulty: <H256>::from([1; 32]), 
-        timestamp: Default::default(),
+        timestamp: initial_time,
         merkle_root: Default::default(),
         mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),
         vrf_proof: Default::default(),

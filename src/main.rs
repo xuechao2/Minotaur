@@ -49,6 +49,7 @@ fn main() {
      (@arg spv_client: --spv [BOOL] default_value("false") "Whether spv client or full node") // false for full node, true for spv client
      (@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
      (@arg vrf_secret_key: --sk [String] "Secret key to be used to print or validate proof" )
+     (@arg initial_time: --ts [u128] "Timestamp of the genesis block" )
     )
     .get_matches();
 
@@ -56,6 +57,17 @@ fn main() {
     // Inputs: Secret Key, Public Key (derived) & Message
     let vrf_secret_key = hex::decode(&matches.value_of("vrf_secret_key").unwrap()).unwrap();
     let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+
+    
+    let initial_time = matches
+        .value_of("initial_time")
+        .unwrap()
+        .parse::<u128>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing initial_time: {}", e);
+            process::exit(1);
+        });
+
 
     let spv_client = matches
         .value_of("spv_client")
@@ -119,7 +131,7 @@ fn main() {
         });
 
     
-    let mut blockchain = Blockchain::new();
+    let mut blockchain = Blockchain::new(initial_time);
     let mut buffer = HashMap::new();
     let mut all_blocks = HashMap::new();
     let mut delays = Vec::new();

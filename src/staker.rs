@@ -212,10 +212,11 @@ impl Context {
                 let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
                 //info!("Vrf: {}",vrf_hash_sha256);
                 //info!("Target: {}",pos_difficulty);
-                if vrf_hash_sha256 <= pos_difficulty {    //TODO: change to PoS mining
+                if vrf_hash_sha256 <= pos_difficulty {    //TODO: change to PoS mining             
                     let copy = blk.clone();
                     count += 1;
                     info!("Mined {} PoS blocks!", count);
+                    info!("Timestamp of the block: {}", copy.header.timestamp);
                     let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
 
                     self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());

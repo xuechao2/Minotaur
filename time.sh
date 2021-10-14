@@ -1,0 +1,1 @@
+gdate '+%s%6N' > time.txt
