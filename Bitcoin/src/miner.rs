@@ -20,8 +20,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::thread;
 use rand::Rng;
 
-use vrf::openssl::{CipherSuite, ECVRF};
-use vrf::VRF;   
+//use vrf::openssl::{CipherSuite, ECVRF};
+//use vrf::VRF;   
 
 
 enum ControlSignal {
@@ -118,11 +118,11 @@ impl Context {
     fn miner_loop(&mut self) {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
-        let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+        //let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
         // Inputs: Secret Key, Public Key (derived) & Message
-        let vrf_secret_key =
+        //let vrf_secret_key =
             hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
-        let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+        //let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
             // check and react to control signals
@@ -166,8 +166,11 @@ impl Context {
             let rand_slice = rand.to_be_bytes();
             let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
-            let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
-            let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+            //let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
+            //let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+            let vrf_proof = Default::default();
+            let vrf_hash = Default::default();
+            let vrf_public_key:Vec<u8> = Default::default();
 
 
 

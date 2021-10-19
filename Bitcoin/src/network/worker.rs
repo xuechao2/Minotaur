@@ -130,7 +130,7 @@ impl Context {
                     let mut queue: VecDeque<Block> = VecDeque::new();
                     let mut hashes_send = vec![];
 
-                    let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+                    //let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
 
                     for blk in blks {
                         //verify txns inside blks
@@ -163,123 +163,84 @@ impl Context {
                     while !queue.is_empty() {
                         let blk = queue.pop_front().unwrap();
                         let parent = blk.header.parent;
-                        let ts_slice = blk.header.timestamp.to_be_bytes();
-                        let rand_slice = blk.header.rand.to_be_bytes();
-                        let message = [rand_slice,ts_slice].concat();
-                        let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
-                        let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
+                        // let ts_slice = blk.header.timestamp.to_be_bytes();
+                        // let rand_slice = blk.header.rand.to_be_bytes();
+                        // let message = [rand_slice,ts_slice].concat();
+                        // let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
+                        // let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
 
-                        match vrf_beta {
-                            Ok(vrf_beta) => {
-                                if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() 
-                                && blk.header.vrf_hash == vrf_beta  {
-                                    //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
-                                        //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
-                                    if true{
-                                        let txns = blk.content.data.clone();
-                                        let mut valid = true;
-                                        // for txn in txns {
-                                        //     if !transaction_check(&mut current_state,&txn) {
-                                        //         valid =false;
-                                        //     }
-                                        // }
-                                        if valid {                            
-                                            let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                            if self.blockchain.lock().unwrap().insert(&blk) {
-                                                //self.state.lock().unwrap().update_block(&blk);
-                                                // longest chain changes
-                                                // update the longest chain
-                                                let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                                // remove the common prefix
-                                                while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
-                                                    last_longest_chain.remove(0);
-                                                    longest_chain.remove(0);
-                                                }
-                                                let mut blocks = Vec::new();
-                                                // update the state
-                                                for blk_hash in longest_chain {
-                                                    let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                                                    blocks.push(block);
-                                                }
-                                                // self.state.lock().unwrap().update_blocks(&blocks);
-                                                
-                                                // remove txns from mempool
-                                                for blk in blocks {
-                                                    let txns = blk.content.data;
-                                                    self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                                }
+                
+                        if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() {
+                        //&& blk.header.vrf_hash == vrf_beta  {
+                            //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
+                                //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
+                            if self.blockchain.lock().unwrap().contains_hash(&parent) {
+                                let txns = blk.content.data.clone();
+                                // for txn in txns {
+                                //     if !transaction_check(&mut current_state,&txn) {
+                                //         valid =false;
+                                //     }
+                                // }                           
+                                let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                                if self.blockchain.lock().unwrap().insert(&blk) {
+                                    //self.state.lock().unwrap().update_block(&blk);
+                                    // longest chain changes
+                                    // update the longest chain
+                                    let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                                    // remove the common prefix
+                                    while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
+                                        last_longest_chain.remove(0);
+                                        longest_chain.remove(0);
+                                    }
+                                    let mut blocks = Vec::new();
+                                    // update the state
+                                    for blk_hash in longest_chain {
+                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                                        blocks.push(block);
+                                    }
+                                    // self.state.lock().unwrap().update_blocks(&blocks);
+                                    
+                                    // remove txns from mempool
+                                    for blk in blocks {
+                                        let txns = blk.content.data;
+                                        self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                                    }
 
-                                                // add txns back to the mempool
-                                                for blk_hash in last_longest_chain {
-                                                    let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                                                    let txns = block.content.data.clone();
-                                                    self.mempool.lock().unwrap().extend(txns);
+                                    // add txns back to the mempool
+                                    for blk_hash in last_longest_chain {
+                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                                        let txns = block.content.data.clone();
+                                        self.mempool.lock().unwrap().extend(txns);
 
-                                                }
+                                    }
 
-                                                //clean up mempool
-                                                // let mem_snap = self.mempool.lock().unwrap().clone();
-                                                // let mem_size = mem_snap.len();
-                                                // let txns = mem_snap.to_vec();
-                                                // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                                                // if self.state.lock().unwrap().check_block(&temp_tip) {
-                                                //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                                                //     let mut invalid_txns = Vec::new();
-                                                //     for txn in txns {
-                                                //         let copy = txn.clone();
-                                                //         let pubk = copy.sign.pubk.clone();
-                                                //         let nonce = copy.transaction.nonce.clone();
-                                                //         let value = copy.transaction.value.clone();
-
-                                                //         let sender: H160 = compute_key_hash(pubk).into();
-                                                //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                                                //         if s_nonce >= nonce {
-                                                //             invalid_txns.push(copy.clone());
-                                                //         }
-                                                //     }
-                                                //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
-                                                // }
-                                                
-
-
-                                            } else {
-                                                // longest chain not change
-                                                //self.state.lock().unwrap().update_block(&blk);
-                                                // remove txns from mempool
-                                                //let txns = blk.content.data;
-                                                //self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                            }
-                                        }
-                                    } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
-                                        let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
-                                        self.buffer.lock().unwrap().remove(&parent);
-                                        queue.push_back(parent_blk);
-                                        queue.push_back(blk);
-                                    } else {
-                                        let mut flag = false;
-                                        for i in 0..queue.len() {
-                                            let block = queue.get(i).unwrap();
-                                            if block.header.hash() == parent {
-                                                flag = true;
-                                                break;
-                                            }
-                                        }
-                                        // if queue contains the parent
-                                        if flag {
-                                            queue.push_back(blk);
-                                        } else {
-                                            if !hashes_request.contains(&blk.header.parent) {
-                                                hashes_request.push(blk.header.parent);
-                                            }
-                                            self.buffer.lock().unwrap().insert(blk.hash(), blk);
-                                        }
+                                } 
+                            } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
+                                let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
+                                self.buffer.lock().unwrap().remove(&parent);
+                                queue.push_back(parent_blk);
+                                queue.push_back(blk);
+                            } else {
+                                let mut flag = false;
+                                for i in 0..queue.len() {
+                                    let block = queue.get(i).unwrap();
+                                    if block.header.hash() == parent {
+                                        flag = true;
+                                        break;
                                     }
                                 }
-                            }
-                            Err(e) => {
-                                println!("VRF proof is not valid: {}", e);
+                                // if queue contains the parent
+                                if flag {
+                                    queue.push_back(blk);
+                                } else {
+                                    if !hashes_request.contains(&blk.header.parent) {
+                                        hashes_request.push(blk.header.parent);
+                                    }
+                                    self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                }
                             }
                         }
+                
                     }
 
                     if !hashes_request.is_empty() {
