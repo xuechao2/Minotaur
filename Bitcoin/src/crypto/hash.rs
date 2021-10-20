@@ -169,12 +169,29 @@ pub fn generate_random_hash() -> H256 {
         (&raw_bytes).into()
     }
 
+pub fn hash_divide_by(input: &H256, divide: f64) -> H256 {
+        let mut result_bytes = [0;32];
+        for n in 1..17 {
+            let value = u16::from_be_bytes(input.0[2*(n-1)..2*n].try_into().unwrap());
+            //println!{"{}",value};
+            let value = value as f64;
+            let result = value/divide;
+            let result = result as u16;
+            let results:[u8;2] = result.to_be_bytes();
+            //println!{"{}",result};
+            result_bytes[2*(n-1)]=results[0];
+            result_bytes[2*(n-1)+1]=results[1];
 
+        }
+        (&result_bytes).into()
+
+    }
 
 #[cfg(any(test, test_utilities))]
 pub mod tests {
     use super::H256;
     use rand::Rng;
+    use std::convert::TryInto;
 
     pub fn generate_random_hash() -> H256 {
         let mut rng = rand::thread_rng();
@@ -184,10 +201,40 @@ pub mod tests {
         (&raw_bytes).into()
     }
 
+    pub fn hash_divide_by(input: &H256, divide: f64) -> H256 {
+        let mut result_bytes = [0;32];
+        for n in 1..17 {
+            let value = u16::from_be_bytes(input.0[2*(n-1)..2*n].try_into().unwrap());
+            //println!{"{}",value};
+            let value = value as f64;
+            let result = value/divide;
+            let result = result as u16;
+            let results:[u8;2] = result.to_be_bytes();
+            //println!{"{}",result};
+            result_bytes[2*(n-1)]=results[0];
+            result_bytes[2*(n-1)+1]=results[1];
+
+        }
+        (&result_bytes).into()
+
+    }
+
+    #[test]
+    fn hash_test() {
+        let hash: H256 = <H256>::from([3; 32]);
+        println!("{}",hash);
+        let result = hash_divide_by(&hash,1.5);
+        println!("{}",result);
+        let ans: H256 = <H256>::from([2; 32]);
+        println!("{}",ans);
+        assert_eq!(result,ans);
+    }
+
     use vrf::openssl::{CipherSuite, ECVRF};
     use vrf::VRF;
 
     #[test]
+
     fn vrf_test() {
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
         // Inputs: Secret Key, Public Key (derived) & Message

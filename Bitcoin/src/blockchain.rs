@@ -1,6 +1,6 @@
 use crate::block::generate_genesis_block;
 use crate::block::{Block,Header};
-use crate::crypto::hash::{H256,Hashable};
+use crate::crypto::hash::{H256,Hashable,hash_divide_by};
 use std::collections::{HashMap};
 use serde::{Serialize, Deserialize};
 //use crate::block::generate_random_block;
@@ -19,6 +19,8 @@ pub struct Blockchain {
 	map: HashMap<H256,MerkleMountainRange<Sha256, Vec<Hash>>>,
     tip: H256,
     depth: u128,
+    epoch_size: u128,
+    epoch_time: u128,
 }
 
 impl Blockchain {
@@ -34,7 +36,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0}
+		Blockchain{chain, map, tip, depth:0, epoch_size:20, epoch_time: 60_000_000}
 	
     }
 
@@ -74,7 +76,31 @@ impl Blockchain {
 	}
 	
 	pub fn get_difficulty(&self) -> H256 {
-		self.chain.get(&self.tip).unwrap().blk.header.difficulty
+		let epoch_size = self.epoch_size;
+		let depth = self.depth;
+		let epoch_time = self.epoch_time;
+		let tip = self.tip;
+		if depth % epoch_size == 1 && depth > 1 {
+			let old_diff: H256 = self.chain.get(&self.tip).unwrap().blk.header.difficulty;
+			let end_time: u128 = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let mut hash = tip.clone();
+			for i in 1..(epoch_size+1) {
+				hash = self.chain.get(&hash).unwrap().blk.header.parent;
+			}
+			let start_time: u128 = self.chain.get(&hash).unwrap().blk.header.timestamp;
+			let mut ratio = (epoch_time as f64)/((end_time - start_time) as f64);
+			println!("Ratio: {}", ratio);
+			if ratio > 4.0 {
+				ratio = 4.0;
+			} else if ratio < 0.25 {
+				ratio = 0.25;
+			}
+			let new_diff:H256 = hash_divide_by(&old_diff,ratio);
+			println!("Mining difficulty changes from {} to {}",old_diff, new_diff);
+			new_diff
+		} else {
+			self.chain.get(&self.tip).unwrap().blk.header.difficulty
+		}
 	}
 	
 	pub fn get_depth(&self) -> u128 {
