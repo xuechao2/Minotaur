@@ -255,7 +255,7 @@ impl Context {
                                 }
                             }
                         } else {
-                            if blk.hash() <= blk.header.pow_difficulty && blk.header.pow_difficulty == self.blockchain.lock().unwrap().get_pow_difficulty() {
+                            if blk.hash() <= blk.header.pow_difficulty && blk.header.pow_difficulty == self.blockchain.lock().unwrap().get_pow_difficulty(blk.header.timestamp) {
                                 if self.blockchain.lock().unwrap().contains_hash(&parent) {
                                     self.blockchain.lock().unwrap().insert_pow(&blk);
                                     let txns = blk.content.data.clone();

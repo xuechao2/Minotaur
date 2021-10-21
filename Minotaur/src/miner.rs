@@ -126,6 +126,7 @@ impl Context {
 
     fn miner_loop(&mut self) {
         let mut count = 0;
+        let mut epoch:u128 = 0;
         let start: time::SystemTime = SystemTime::now();
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
         // //Inputs: Secret Key, Public Key (derived) & Message
@@ -160,9 +161,15 @@ impl Context {
 
 
             let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
-            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty();
-            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+            let old_diff = self.blockchain.lock().unwrap().find_one_block(&parent).unwrap().header.pow_difficulty;
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+            let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
+            if current_epoch > epoch {
+                println!("Epoch {}: Mining difficulty changes from {} to {}",current_epoch,old_diff, pow_difficulty);
+                epoch = current_epoch;
+            }
+            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Vec::new();
@@ -305,7 +312,7 @@ impl Context {
                 }
             }
             if count == 100000 {
-                info!("pow_difficulty {}", self.blockchain.lock().unwrap().get_pow_difficulty());
+                //info!("pow_difficulty {}", self.blockchain.lock().unwrap().get_pow_difficulty());
                 let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
                 info!("{} seconds elapsed", time);
                 let rate = 100000/time;

@@ -1,6 +1,6 @@
 use crate::block::generate_genesis_block;
 use crate::block::{Block,Header};
-use crate::crypto::hash::{H256,Hashable};
+use crate::crypto::hash::{H256,Hashable,hash_divide_by};
 use std::collections::{HashMap};
 use serde::{Serialize, Deserialize};
 //use crate::block::generate_random_block;
@@ -21,6 +21,9 @@ pub struct Blockchain {
     depth: u128,
     num_pos: u128,
     num_pow: u128,
+    epoch_size: u128,
+    epoch_time: u128,
+    genesis_time: u128,
 }
 
 impl Blockchain {
@@ -37,7 +40,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0}
+		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:20, epoch_time: 60_000_000,genesis_time: initial_time}
 	
     }
 
@@ -103,9 +106,63 @@ impl Blockchain {
 		self.tip
 	}
 	
-	pub fn get_pow_difficulty(&self) -> H256 {
-		self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty
+	pub fn get_pow_difficulty(&self, current_ts:u128) -> H256 {
+			let epoch_size = self.epoch_size;
+			let depth = self.depth;
+			let epoch_time = self.epoch_time;
+			let tip = self.tip;
+			let tip_time = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let genesis_time = self.genesis_time;
+			let tip_epoch = (tip_time - genesis_time)/epoch_time;
+			let curent_epoch = (current_ts - genesis_time)/epoch_time;
+			if curent_epoch > tip_epoch && depth > 1 {
+				let old_diff: H256 = self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty;
+				//let end_time: u128 = self.chain.get(&tip).unwrap().blk.header.timestamp;
+				let mut hash = tip.clone();
+				let mut all_hashs = Vec::new(); 
+				while true {
+					let blk = self.chain.get(&hash).unwrap().blk.clone();
+					let pow_blks = blk.content.transaction_ref.clone();
+					for pow_blk in pow_blks {
+						if !all_hashs.contains(&pow_blk) {
+                            all_hashs.push(pow_blk);
+                        }
+					}
+					hash = self.chain.get(&hash).unwrap().blk.header.parent;
+					let blk_time = self.chain.get(&hash).unwrap().blk.header.timestamp;
+					let blk_epoch = (blk_time - genesis_time)/epoch_time;
+					if blk_epoch < tip_epoch || blk_time == self.genesis_time {
+						break;
+					}
+				}
+				let num_blk = all_hashs.len();
+				//let start_time: u128 = self.chain.get(&hash).unwrap().blk.header.timestamp;
+				let mut ratio = (num_blk as f64)/(epoch_size as f64);
+				//println!("Ratio: {}", ratio);
+				// if ratio > 4.0 {
+				// 	ratio = 4.0;
+				// } else if ratio < 0.25 {
+				// 	ratio = 0.25;
+				// }
+				let new_diff:H256 = hash_divide_by(&old_diff,ratio);
+				//println!("Mining difficulty changes from {} to {}",old_diff, new_diff);
+				new_diff
+			} else {
+				self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty
+			}
 	}
+
+	pub fn epoch(&self, current_ts:u128) -> u128 {
+			let epoch_size = self.epoch_size;
+			//let depth = self.depth;
+			let epoch_time = self.epoch_time;
+			//let tip = self.tip;
+			//let tip_time = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let genesis_time = self.genesis_time;
+			//let tip_epoch = (tip_time - genesis_time)/epoch_time;
+			let current_epoch = (current_ts - genesis_time)/epoch_time;
+			current_epoch
+		}
 
 	pub fn get_pos_difficulty(&self) -> H256 {
 		self.chain.get(&self.tip).unwrap().blk.header.pos_difficulty

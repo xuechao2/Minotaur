@@ -161,9 +161,9 @@ impl Context {
 
 
             let parent = self.blockchain.lock().unwrap().tip();
-            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty();
-            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();
