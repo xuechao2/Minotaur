@@ -38,9 +38,9 @@ use vrf::VRF;
 
 fn main() {
     // parse command line arguments
-    let matches = clap_app!(Bitcoin =>
+    let matches = clap_app!(Minotaur =>
      (version: "0.1")
-     (about: "Bitcoin client")
+     (about: "Minotaur client")
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
