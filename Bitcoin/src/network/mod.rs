@@ -3,4 +3,4 @@ pub mod peer;
 pub mod server;
 pub mod worker;
 pub mod spv_worker;
-pub mod fly_worker;
+//pub mod fly_worker;

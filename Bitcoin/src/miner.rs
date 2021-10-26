@@ -118,11 +118,11 @@ impl Context {
     fn miner_loop(&mut self) {
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
-        //let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+        // let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
         // Inputs: Secret Key, Public Key (derived) & Message
-        //let vrf_secret_key =
-            hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
-        //let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+        // let vrf_secret_key =
+        //     hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
+        // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
         loop {
             // check and react to control signals
@@ -153,7 +153,7 @@ impl Context {
             let parent = self.blockchain.lock().unwrap().tip();
             let difficulty = self.blockchain.lock().unwrap().get_difficulty();
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
+            // let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Vec::new();
             // add txns from mempool to from a block
@@ -198,8 +198,7 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
-                      &vrf_public_key, rand);
+                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &vrf_proof, &vrf_hash, &vrf_public_key, rand);
                 if blk.hash() <= difficulty {
                     let copy = blk.clone();
                     count += 1;
@@ -219,12 +218,9 @@ impl Context {
                             last_longest_chain.remove(0);
                             longest_chain.remove(0);
                         }
-                        let mut blocks = Vec::new();
+                        // let mut blocks = Vec::new();
                         // update the state
-                        for blk_hash in longest_chain {
-                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                            blocks.push(block);
-                        }
+                    
                         // self.state.lock().unwrap().update_blocks(&blocks);
                         
 
@@ -236,10 +232,13 @@ impl Context {
                         }
 
                         // remove txns from mempool
-                        for b in blocks {
-                            let txns = b.content.data;
+                        for blk_hash in longest_chain {
+                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                            let txns = block.content.data.clone();
                             self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                         }
+
+
                         //clean up mempool
                         // let mem_snap = self.mempool.lock().unwrap().clone();
                         // let mem_size = mem_snap.len();

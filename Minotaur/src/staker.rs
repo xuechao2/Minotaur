@@ -164,7 +164,7 @@ impl Context {
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
             let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
-            let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
+            //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();
             // add txn_blks from tranpool to from a PoS block
@@ -206,7 +206,7 @@ impl Context {
             if enough_txn_block {
                 // info!("Start mining!");
 
-                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
                       &self.vrf_public_key, rand);
                 let vrf_hash_bytes: &[u8] = &vrf_hash;
                 let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();

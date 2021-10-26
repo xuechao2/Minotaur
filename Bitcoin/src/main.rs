@@ -22,7 +22,7 @@ use clap::clap_app;
 use crossbeam::channel;
 use log::{error, info};
 use api::Server as ApiServer;
-use network::{server, worker, spv_worker,fly_worker};
+use network::{server, worker, spv_worker};
 use std::net;
 use std::process;
 use std::thread;
@@ -43,7 +43,7 @@ fn main() {
      (@arg known_peer: -c --connect ... [PEER] "Sets the peers to connect to at start")
      (@arg p2p_workers: --("p2p-workers") [INT] default_value("4") "Sets the number of worker threads for P2P server")
      (@arg spv_client: --spv [BOOL] default_value("false") "Whether spv client or full node") // false for full node, true for spv client
-     (@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
+     //(@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
     )
     .get_matches();
 
@@ -56,14 +56,14 @@ fn main() {
             process::exit(1);
         });
 
-    let fly_client = matches
-        .value_of("fly_client")
-        .unwrap()
-        .parse::<bool>()
-        .unwrap_or_else(|e| {
-            error!("Error parsing Fly client: {}", e);
-            process::exit(1);
-        });
+    // let fly_client = matches
+    //     .value_of("fly_client")
+    //     .unwrap()
+    //     .parse::<bool>()
+    //     .unwrap_or_else(|e| {
+    //         error!("Error parsing Fly client: {}", e);
+    //         process::exit(1);
+    //     });
 
 
 
@@ -150,11 +150,11 @@ fn main() {
     );
     spv_ctx.start();
 
-    let (fly_ctx, fly) = fly::new(
-        //&longestchain, 
-        &server,
-    );
-    fly_ctx.start();
+    // let (fly_ctx, fly) = fly::new(
+    //     //&longestchain, 
+    //     &server,
+    // );
+    // fly_ctx.start();
 
     if spv_client {
         let spv_worker_ctx = spv_worker::new(
@@ -164,14 +164,14 @@ fn main() {
             &longestchain,
         );
         spv_worker_ctx.start();
-    } else if fly_client {
-        let fly_worker_ctx = fly_worker::new(
-            p2p_workers,
-            msg_rx,
-            &server,
-            //&longestchain,
-        );
-        fly_worker_ctx.start();
+    // } else if fly_client {
+    //     let fly_worker_ctx = fly_worker::new(
+    //         p2p_workers,
+    //         msg_rx,
+    //         &server,
+    //         //&longestchain,
+    //     );
+    //     fly_worker_ctx.start();
     } else {
         let worker_ctx = worker::new(
             p2p_workers,
@@ -250,7 +250,7 @@ fn main() {
         &txgenerator,
         &server,
         &spv,
-        &fly,
+        //&fly,
     );
 
     loop {

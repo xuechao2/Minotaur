@@ -25,7 +25,7 @@ pub struct Header {
     pub pos_difficulty: H256,
     pub timestamp: u128,  // TODO: use current time
     pub merkle_root: H256,
-    pub mmr_root: Hash,  //ignore this for now
+    //pub mmr_root: Hash,  //ignore this for now
     pub vrf_proof: Vec<u8>,
     pub vrf_hash: Vec<u8>,
     pub vrf_pub_key: Vec<u8>,
@@ -79,7 +79,7 @@ impl Block {
 
 
 pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, pow_difficulty: &H256, pos_difficulty: &H256,
-                      timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
+                      timestamp: u128, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(transaction_ref);
     let block_type = true; 
@@ -94,7 +94,7 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
         pos_difficulty: *pos_difficulty, 
         timestamp: timestamp,
         merkle_root: mt.root(),
-        mmr_root: parent_mmr.get_merkle_root().unwrap(),
+        //mmr_root: parent_mmr.get_merkle_root().unwrap(),
         vrf_proof: vrf_proof.to_vec(),
         vrf_hash: vrf_hash.to_vec(),
         vrf_pub_key: vrf_pub_key.to_vec(),
@@ -108,7 +108,7 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
 }
 
 pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, pow_difficulty: &H256, pos_difficulty: &H256, 
-                      timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
+                      timestamp: u128, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(data);
     let block_type = false; 
@@ -123,7 +123,7 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
         pos_difficulty: *pos_difficulty,
         timestamp: timestamp,
         merkle_root: mt.root(),
-        mmr_root: parent_mmr.get_merkle_root().unwrap(),
+        //mmr_root: parent_mmr.get_merkle_root().unwrap(),
         vrf_proof: vrf_proof.to_vec(),
         vrf_hash: vrf_hash.to_vec(),
         vrf_pub_key: vrf_pub_key.to_vec(),
@@ -149,7 +149,7 @@ pub fn generate_genesis_block(initial_time:u128) -> Block {
         pos_difficulty: <H256>::from([1; 32]), 
         timestamp: initial_time,
         merkle_root: Default::default(),
-        mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),
+        // mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),
         vrf_proof: Default::default(),
         vrf_hash: Default::default(),
         vrf_pub_key: Default::default(),

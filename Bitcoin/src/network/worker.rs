@@ -192,12 +192,8 @@ impl Context {
                                         last_longest_chain.remove(0);
                                         longest_chain.remove(0);
                                     }
-                                    let mut blocks = Vec::new();
+                                    // let mut blocks = Vec::new();
                                     // update the state
-                                    for blk_hash in longest_chain {
-                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                                        blocks.push(block);
-                                    }
                                     // self.state.lock().unwrap().update_blocks(&blocks);
                                     
 
@@ -210,8 +206,9 @@ impl Context {
                                     }
 
                                     // remove txns from mempool
-                                    for blk in blocks {
-                                        let txns = blk.content.data;
+                                    for blk_hash in longest_chain {
+                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                                        let txns = block.content.data.clone();
                                         self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                                     }
 

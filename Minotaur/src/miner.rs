@@ -170,7 +170,7 @@ impl Context {
                 epoch = current_epoch;
             }
             let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
-            let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
+            //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Vec::new();
             let mut transaction_ref: Vec<H256> = Default::default();
@@ -212,7 +212,7 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
                       &self.vrf_public_key, rand);
                 if blk.hash() <= pow_difficulty {
                     self.blockchain.lock().unwrap().insert_pow(&blk);

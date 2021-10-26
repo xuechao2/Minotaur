@@ -1,7 +1,7 @@
 use serde::Serialize;
 use crate::miner::Handle as MinerHandle;
 use crate::spv::Handle as SPVHandle;
-use crate::fly::Handle as FlyHandle;
+//use crate::fly::Handle as FlyHandle;
 use crate::txgenerator::Handle as TxgeneratorHandle;
 use crate::network::server::Handle as NetworkServerHandle;
 use crate::network::message::Message;
@@ -20,7 +20,7 @@ pub struct Server {
     txgenerator: TxgeneratorHandle,
     network: NetworkServerHandle,
     spv: SPVHandle,
-    fly: FlyHandle
+    //fly: FlyHandle
 }
 
 #[derive(Serialize)]
@@ -49,7 +49,7 @@ impl Server {
         txgenerator: &TxgeneratorHandle,
         network: &NetworkServerHandle,
         spv: &SPVHandle,
-        fly: &FlyHandle,
+        //fly: &FlyHandle,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
         let server = Self {
@@ -58,7 +58,7 @@ impl Server {
             txgenerator: txgenerator.clone(),
             network: network.clone(),
             spv: spv.clone(),
-            fly: fly.clone(),
+            //fly: fly.clone(),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
@@ -66,7 +66,7 @@ impl Server {
                 let txgenerator = server.txgenerator.clone();
                 let network = server.network.clone();
                 let spv = server.spv.clone();
-                let fly = server.fly.clone();
+                //let fly = server.fly.clone();
                 thread::spawn(move || {
                     // a valid url requires a base
                     let base_url = Url::parse(&format!("http://{}/", &addr)).unwrap();
@@ -126,30 +126,30 @@ impl Server {
                             spv.start(lambda);
                             respond_result!(req, true, "ok");
                         }
-                        "/fly/start" => {
-                            let params = url.query_pairs();
-                            let params: HashMap<_, _> = params.into_owned().collect();
-                            let lambda = match params.get("lambda") {
-                                Some(v) => v,
-                                None => {
-                                    respond_result!(req, false, "missing lambda");
-                                    return;
-                                }
-                            };
-                            let lambda = match lambda.parse::<u64>() {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    respond_result!(
-                                        req,
-                                        false,
-                                        format!("error parsing lambda: {}", e)
-                                    );
-                                    return;
-                                }
-                            };
-                            fly.start(lambda);
-                            respond_result!(req, true, "ok");
-                        }
+                        // "/fly/start" => {
+                        //     let params = url.query_pairs();
+                        //     let params: HashMap<_, _> = params.into_owned().collect();
+                        //     let lambda = match params.get("lambda") {
+                        //         Some(v) => v,
+                        //         None => {
+                        //             respond_result!(req, false, "missing lambda");
+                        //             return;
+                        //         }
+                        //     };
+                        //     let lambda = match lambda.parse::<u64>() {
+                        //         Ok(v) => v,
+                        //         Err(e) => {
+                        //             respond_result!(
+                        //                 req,
+                        //                 false,
+                        //                 format!("error parsing lambda: {}", e)
+                        //             );
+                        //             return;
+                        //         }
+                        //     };
+                        //     fly.start(lambda);
+                        //     respond_result!(req, true, "ok");
+                        // }
                         "/tx-generator/start" => {
                             let params = url.query_pairs();
                             let params: HashMap<_, _> = params.into_owned().collect();
