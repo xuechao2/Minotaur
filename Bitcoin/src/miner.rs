@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
-use crate::block::generate_pos_block;
+use crate::block::generate_pow_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
 use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};
@@ -162,9 +162,9 @@ impl Context {
 
             let mut transaction_ref = Default::default();
             let rand: u128 = Default::default();  // TODO: update rand every epoch
-            let ts_slice = ts.to_be_bytes();
-            let rand_slice = rand.to_be_bytes();
-            let message = [rand_slice,ts_slice].concat();
+            // let ts_slice = ts.to_be_bytes();
+            // let rand_slice = rand.to_be_bytes();
+            // let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
             //let vrf_proof = vrf.prove(&vrf_secret_key, &message).unwrap();
             //let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
@@ -198,7 +198,7 @@ impl Context {
             while enough_txn {
                 // info!("Start mining!");
 
-                let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
+                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &parent_mmr, &vrf_proof, &vrf_hash, 
                       &vrf_public_key, rand);
                 if blk.hash() <= difficulty {
                     let copy = blk.clone();
@@ -213,7 +213,7 @@ impl Context {
                         // longest chain changes
                         // update the longest chain
                         let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                        longest_chain.reverse();
+                        // longest_chain.reverse();
                         // remove the common prefix
                         while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
                             last_longest_chain.remove(0);
@@ -227,17 +227,18 @@ impl Context {
                         }
                         // self.state.lock().unwrap().update_blocks(&blocks);
                         
-                        // remove txns from mempool
-                        for b in blocks {
-                            let txns = b.content.data;
-                            self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                        }
 
                         // add txns back to the mempool
                         for blk_hash in last_longest_chain {
                             let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
                             let txns = block.content.data.clone();
                             self.mempool.lock().unwrap().extend(txns);
+                        }
+
+                        // remove txns from mempool
+                        for b in blocks {
+                            let txns = b.content.data;
+                            self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                         }
                         //clean up mempool
                         // let mem_snap = self.mempool.lock().unwrap().clone();

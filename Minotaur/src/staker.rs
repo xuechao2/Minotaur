@@ -226,7 +226,7 @@ impl Context {
                         // longest chain changes
                         // update the longest chain
                         let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                        longest_chain.reverse();
+                        // longest_chain.reverse();
                         // remove the common prefix
                         while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
                             last_longest_chain.remove(0);

@@ -200,11 +200,6 @@ impl Context {
                                     }
                                     // self.state.lock().unwrap().update_blocks(&blocks);
                                     
-                                    // remove txns from mempool
-                                    for blk in blocks {
-                                        let txns = blk.content.data;
-                                        self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                    }
 
                                     // add txns back to the mempool
                                     for blk_hash in last_longest_chain {
@@ -212,6 +207,12 @@ impl Context {
                                         let txns = block.content.data.clone();
                                         self.mempool.lock().unwrap().extend(txns);
 
+                                    }
+
+                                    // remove txns from mempool
+                                    for blk in blocks {
+                                        let txns = blk.content.data;
+                                        self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                                     }
 
                                 } 

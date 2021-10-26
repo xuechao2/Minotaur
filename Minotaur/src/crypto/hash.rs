@@ -171,16 +171,18 @@ pub fn generate_random_hash() -> H256 {
 
 pub fn hash_divide_by(input: &H256, divide: f64) -> H256 {
         let mut result_bytes = [0;32];
-        for n in 1..17 {
-            let value = u16::from_be_bytes(input.0[2*(n-1)..2*n].try_into().unwrap());
+        for n in 1..9 {
+            let value = u32::from_be_bytes(input.0[4*(n-1)..4*n].try_into().unwrap());
             //println!{"{}",value};
             let value = value as f64;
             let result = value/divide;
-            let result = result as u16;
-            let results:[u8;2] = result.to_be_bytes();
+            let result = result as u32;
+            let results:[u8;4] = result.to_be_bytes();
             //println!{"{}",result};
-            result_bytes[2*(n-1)]=results[0];
-            result_bytes[2*(n-1)+1]=results[1];
+            result_bytes[4*(n-1)]=results[0];
+            result_bytes[4*(n-1)+1]=results[1];
+            result_bytes[4*(n-1)+2]=results[2];
+            result_bytes[4*(n-1)+3]=results[3];
 
         }
         (&result_bytes).into()

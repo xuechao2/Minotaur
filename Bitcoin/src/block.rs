@@ -77,7 +77,7 @@ impl Block {
 
 
 
-pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
+pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
                       timestamp: u128, parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128) -> Block {
     let mt: MerkleTree = MerkleTree::new(data);
@@ -114,7 +114,11 @@ pub fn generate_genesis_block() -> Block {
     let header = Header {
         parent: Default::default(),
         nonce: Default::default(),
-        difficulty: <H256>::from([1; 32]), 
+        //difficulty: <H256>::from([1; 32]), 
+        difficulty: <H256>::from([
+            0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]),
         timestamp: Default::default(),
         merkle_root: Default::default(),
         mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),
