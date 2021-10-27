@@ -170,7 +170,7 @@ impl Context {
                         // let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
 
                 
-                        if blk.hash() <= blk.header.difficulty && blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() {
+                        if blk.hash() <= blk.header.difficulty { //&& blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() {
                         //&& blk.header.vrf_hash == vrf_beta  {
                             //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
                                 //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
