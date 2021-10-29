@@ -264,7 +264,7 @@ impl Context {
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // debug!("Total Block Delay:{}", total_delay);
                     // info!("Avg Block Delay:{}", total_delay/size);
-                    self.blockchain.lock().unwrap().print_longest_chain();
+                    //self.blockchain.lock().unwrap().print_longest_chain();
                 }
 
 

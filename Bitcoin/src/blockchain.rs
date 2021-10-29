@@ -36,7 +36,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, epoch_size:20, epoch_time: 60_000_000}
+		Blockchain{chain, map, tip, depth:0, epoch_size:500, epoch_time: 120_000_000}
 	
     }
 
