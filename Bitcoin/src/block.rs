@@ -116,7 +116,7 @@ pub fn generate_genesis_block() -> Block {
         nonce: Default::default(),
         //difficulty: <H256>::from([1; 32]), 
         difficulty: <H256>::from([
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ]),
         timestamp: Default::default(),
