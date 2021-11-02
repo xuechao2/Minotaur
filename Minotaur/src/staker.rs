@@ -296,7 +296,7 @@ impl Context {
                     let last_block = self.blockchain.lock().unwrap().tip();                    
                     info!("Tranpool size: {}", self.tranpool.lock().unwrap().len());
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
-                    //self.blockchain.lock().unwrap().print_longest_chain();
+                    self.blockchain.lock().unwrap().print_longest_chain();
                     self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
                     //break;
                 }
