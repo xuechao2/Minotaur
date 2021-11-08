@@ -30,3 +30,6 @@ vrf = "0.2.2"
 [features]
 default = []
 test-utilities = []
+
+[profile.release]
+debug = true

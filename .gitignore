@@ -1,4 +1,8 @@
 target/
 **/*.rs.bk
 .idea
-.DS_Store
+**/.DS_Store
+**/time.txt
+**/stacks.folded
+**/out.user_stacks
+**/*.log
