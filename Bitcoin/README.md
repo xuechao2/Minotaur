@@ -9,5 +9,5 @@ Start transaction generator:
 `sh fast_txns.sh`
 
 Start mining:
-`sh start_mining`
+`sh start_mining.sh`
 
