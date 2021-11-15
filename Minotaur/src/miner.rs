@@ -35,11 +35,17 @@ enum OperatingState {
     ShutDown,
 }
 
+pub enum ContextUpdateSignal {
+    NewBlock,
+}
+
 pub struct Context {
     /// Channel for receiving control signal
     blockchain: Arc<Mutex<Blockchain>>,
     control_chan: Receiver<ControlSignal>,
     operating_state: OperatingState,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: Sender<ContextUpdateSignal>,
     server: ServerHandle,
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     state: Arc<Mutex<State>>,
@@ -57,6 +63,8 @@ pub struct Handle {
 
 pub fn new(
     blockchain: &Arc<Mutex<Blockchain>>,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: &Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
@@ -71,6 +79,8 @@ pub fn new(
         blockchain: Arc::clone(blockchain),
         control_chan: signal_chan_receiver,
         operating_state: OperatingState::Paused,
+        context_update_recv,
+        context_update_send: context_update_send.clone(),
         server: server.clone(),
         mempool: Arc::clone(mempool),
         state: Arc::clone(state),
@@ -134,6 +144,25 @@ impl Context {
         //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
+        let mut parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
+        macro_rules! handle_context_update {
+            () => {
+                {
+                    let mut new_proposer_block: bool = false;
+                    for sig in self.context_update_recv.try_iter() {
+                        match sig {
+                            ContextUpdateSignal::NewBlock=> {
+                                new_proposer_block = true;
+                            }
+                        }
+                    }
+                    if new_proposer_block {
+                        parent = self.blockchain.lock().unwrap().tip();
+                    }
+                }
+            };
+        }
+        
         loop {
             // check and react to control signals
             match self.operating_state {
@@ -157,11 +186,11 @@ impl Context {
                 return;
             }
 
+            handle_context_update!();
             // TODO: actual mining
 
 
-            let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
-            let old_diff = self.blockchain.lock().unwrap().find_one_block(&parent).unwrap().header.pow_difficulty;
+            let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
@@ -199,6 +228,7 @@ impl Context {
 
             while enough_txn {
                 // info!("Start mining!");
+                handle_context_update!(); 
 
                 let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
                       &self.vrf_public_key, rand);
@@ -289,6 +319,7 @@ impl Context {
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     //self.blockchain.lock().unwrap().print_longest_chain();
                     self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                    self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                     break;
                 }
             }
@@ -308,7 +339,7 @@ impl Context {
                 //info!("mining rate {} block/s", rate);
                 let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                 for blk_hash in longest_chain {
-                    let ts = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap().header.timestamp;
+                    let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
                     println!("{}",ts)
                 }
 
