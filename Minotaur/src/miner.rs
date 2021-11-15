@@ -172,11 +172,9 @@ impl Context {
             let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
-            let mut data: Vec<SignedTransaction> = Vec::new();
             let mut transaction_ref: Vec<H256> = Default::default();
             // add txns from mempool to from a block
             let txn_number = 256;
-            let mut enough_txn = false;
 
             let rand: u128 = Default::default();  // TODO: update rand every epoch
             //let ts_slice = ts.to_be_bytes();
@@ -188,26 +186,16 @@ impl Context {
 
 
 
-            let mem_snap = self.mempool.lock().unwrap().clone();
-            let mem_size = mem_snap.len(); 
-            // info!("mem_size {}", mem_size);
-
-            //if  mem_size >= txn_number && self.state.lock().unwrap().check_block(&parent) {
-            if  mem_size >= txn_number { 
-                let txns = mem_snap.to_vec();
-                //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
-                let mut count_txn = 0;
-                for txn in txns {
-                    //if transaction_check(&mut current_state,&txn) {
-                    data.push(txn.clone());
-                    count_txn = count_txn + 1;
-                    if count_txn == txn_number {
-                        enough_txn = true;
-                        break;
-                       // }
-                    }
+            let (enough_txn, data) = {
+                let mem_snap = self.mempool.lock().unwrap();
+                let mem_size = mem_snap.len(); 
+                if mem_size >= txn_number { 
+                    let data: Vec<SignedTransaction> = mem_snap.iter().take(txn_number).cloned().collect();
+                    (true, data)
+                } else {
+                    (false, vec![])
                 }
-            }
+            };
 
             while enough_txn {
                 // info!("Start mining!");
@@ -216,19 +204,19 @@ impl Context {
                       &self.vrf_public_key, rand);
                 if blk.hash() <= pow_difficulty {
                     self.blockchain.lock().unwrap().insert_pow(&blk);
-                    let copy = blk.clone();
+                    // let copy = blk.clone();
                     count += 1;
                     info!("Mined {} PoW blocks!", count);
 
-                    let txns = blk.content.data.clone();
+                    let txns = &blk.content.data;
                     let hash = blk.hash().clone();
                     self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                     if !self.tranpool.lock().unwrap().contains(&hash) {
-                        self.tranpool.lock().unwrap().push(hash);
+                        self.tranpool.lock().unwrap().push(hash.clone());
                     }
                     // let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
 
-                    self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());
+                    self.all_blocks.lock().unwrap().insert(hash.clone(), blk);
 
                     // if self.blockchain.lock().unwrap().insert(&blk) {
                     //     //self.state.lock().unwrap().update_block(&blk);
@@ -300,7 +288,7 @@ impl Context {
                     info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     //self.blockchain.lock().unwrap().print_longest_chain();
-                    self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
+                    self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                     break;
                 }
             }
