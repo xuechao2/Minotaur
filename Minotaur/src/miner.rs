@@ -212,11 +212,11 @@ impl Context {
                     let hash = blk.hash().clone();
                     self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                     if !self.tranpool.lock().unwrap().contains(&hash) {
-                        self.tranpool.lock().unwrap().push(hash);
+                        self.tranpool.lock().unwrap().push(hash.clone());
                     }
                     // let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
 
-                    self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());
+                    self.all_blocks.lock().unwrap().insert(hash.clone(), blk);
 
                     // if self.blockchain.lock().unwrap().insert(&blk) {
                     //     //self.state.lock().unwrap().update_block(&blk);
@@ -288,7 +288,7 @@ impl Context {
                     info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     //self.blockchain.lock().unwrap().print_longest_chain();
-                    self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
+                    self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                     break;
                 }
             }
