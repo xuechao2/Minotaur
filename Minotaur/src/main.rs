@@ -211,6 +211,7 @@ fn main() {
             &all_txns,
             &state,
             &tranpool,
+            context_update_send.clone(),
         );
         worker_ctx.start();
     }
@@ -231,7 +232,7 @@ fn main() {
     let (miner_ctx, miner) = miner::new(
         &blockchain,
         context_update_recv,
-        &context_update_send,
+        context_update_send,
         &server,
         &mempool,
         &state,
