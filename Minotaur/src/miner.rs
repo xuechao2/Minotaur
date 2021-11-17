@@ -144,20 +144,22 @@ impl Context {
         //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
-        let mut parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
         macro_rules! handle_context_update {
-            () => {
+            ($blk:expr) => {
                 {
-                    let mut new_proposer_block: bool = false;
+                    let mut new_block: bool = false;
                     for sig in self.context_update_recv.try_iter() {
                         match sig {
                             ContextUpdateSignal::NewBlock=> {
-                                new_proposer_block = true;
+                                new_block = true;
                             }
                         }
                     }
-                    if new_proposer_block {
-                        parent = self.blockchain.lock().unwrap().tip();
+                    if new_block {
+                        $blk.header.parent = self.blockchain.lock().unwrap().tip();
+                        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        $blk.header.pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+                        $blk.header.pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
                     }
                 }
             };
@@ -186,15 +188,14 @@ impl Context {
                 return;
             }
 
-            handle_context_update!();
             // TODO: actual mining
 
-
-            let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
+            let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
             if current_epoch > epoch {
+                let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
                 println!("Epoch {}: Mining difficulty changes from {} to {}",current_epoch,old_diff, pow_difficulty);
                 epoch = current_epoch;
             }
@@ -231,8 +232,7 @@ impl Context {
                     &self.vrf_public_key, rand);
                 loop {
                     // info!("Start mining!");
-                    handle_context_update!(); 
-                    blk.header.parent = parent.clone();
+                    handle_context_update!(blk); 
                     blk.header.nonce = rng.gen();
 
                     if blk.hash() <= pow_difficulty {

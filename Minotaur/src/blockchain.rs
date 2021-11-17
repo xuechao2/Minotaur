@@ -258,7 +258,6 @@ impl Blockchain {
     }
 
     pub fn find_one_block(&self,hash: &H256) -> Option<Block> {
-    	let one_block : Block;
     	match self.chain.get(&hash) {
 			None => return None,
 			Some(data) => return Some(data.blk.clone()),
@@ -266,7 +265,6 @@ impl Blockchain {
     }
 
     pub fn find_one_header(&self,hash: &H256) -> Option<Header> {
-    	let one_header: Header;
     	match self.chain.get(&hash) {
 			None => return None,
 			Some(data) => return Some(data.blk.header.clone()),
