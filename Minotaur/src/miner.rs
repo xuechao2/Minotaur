@@ -160,6 +160,7 @@ impl Context {
                         let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
                         $blk.header.pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
                         $blk.header.pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+                        $blk.header.timestamp = ts;
                     }
                 }
             };
