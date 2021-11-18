@@ -35,11 +35,17 @@ enum OperatingState {
     ShutDown,
 }
 
+pub enum ContextUpdateSignal {
+    NewBlock,
+}
+
 pub struct Context {
     /// Channel for receiving control signal
     blockchain: Arc<Mutex<Blockchain>>,
     control_chan: Receiver<ControlSignal>,
     operating_state: OperatingState,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: Sender<ContextUpdateSignal>,
     server: ServerHandle,
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     state: Arc<Mutex<State>>,
@@ -57,6 +63,8 @@ pub struct Handle {
 
 pub fn new(
     blockchain: &Arc<Mutex<Blockchain>>,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
@@ -71,6 +79,8 @@ pub fn new(
         blockchain: Arc::clone(blockchain),
         control_chan: signal_chan_receiver,
         operating_state: OperatingState::Paused,
+        context_update_recv,
+        context_update_send,
         server: server.clone(),
         mempool: Arc::clone(mempool),
         state: Arc::clone(state),
@@ -134,6 +144,28 @@ impl Context {
         //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
         // main mining loop
+        macro_rules! handle_context_update {
+            ($blk:expr) => {
+                {
+                    let mut new_block: bool = false;
+                    for sig in self.context_update_recv.try_iter() {
+                        match sig {
+                            ContextUpdateSignal::NewBlock=> {
+                                new_block = true;
+                            }
+                        }
+                    }
+                    if new_block {
+                        $blk.header.parent = self.blockchain.lock().unwrap().tip();
+                        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        $blk.header.pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+                        $blk.header.pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+                        $blk.header.timestamp = ts;
+                    }
+                }
+            };
+        }
+        
         loop {
             // check and react to control signals
             match self.operating_state {
@@ -159,20 +191,19 @@ impl Context {
 
             // TODO: actual mining
 
-
             let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
-            let old_diff = self.blockchain.lock().unwrap().find_one_block(&parent).unwrap().header.pow_difficulty;
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
             if current_epoch > epoch {
+                let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
                 println!("Epoch {}: Mining difficulty changes from {} to {}",current_epoch,old_diff, pow_difficulty);
                 epoch = current_epoch;
             }
             let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
-            let mut transaction_ref: Vec<H256> = Default::default();
+            let transaction_ref: Vec<H256> = Default::default();
             // add txns from mempool to from a block
             let txn_number = 256;
 
@@ -197,99 +228,104 @@ impl Context {
                 }
             };
 
-            while enough_txn {
-                // info!("Start mining!");
+            if enough_txn {
+                let mut blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
+                    &self.vrf_public_key, rand);
+                loop {
+                    // info!("Start mining!");
+                    handle_context_update!(blk); 
+                    blk.header.nonce = rng.gen();
 
-                let blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
-                      &self.vrf_public_key, rand);
-                if blk.hash() <= pow_difficulty {
-                    self.blockchain.lock().unwrap().insert_pow(&blk);
-                    // let copy = blk.clone();
-                    count += 1;
-                    info!("Mined {} PoW blocks!", count);
+                    if blk.hash() <= pow_difficulty {
+                        self.blockchain.lock().unwrap().insert_pow(&blk);
+                        // let copy = blk.clone();
+                        count += 1;
+                        info!("Mined {} PoW blocks!", count);
 
-                    let txns = &blk.content.data;
-                    let hash = blk.hash().clone();
-                    self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                    if !self.tranpool.lock().unwrap().contains(&hash) {
-                        self.tranpool.lock().unwrap().push(hash.clone());
+                        let txns = &blk.content.data;
+                        let hash = blk.hash().clone();
+                        self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                        if !self.tranpool.lock().unwrap().contains(&hash) {
+                            self.tranpool.lock().unwrap().push(hash.clone());
+                        }
+                        // let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+
+                        self.all_blocks.lock().unwrap().insert(hash.clone(), blk);
+
+                        // if self.blockchain.lock().unwrap().insert(&blk) {
+                        //     //self.state.lock().unwrap().update_block(&blk);
+                        //     // longest chain changes
+                        //     // update the longest chain
+                        //     let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                        //     longest_chain.reverse();
+                        //     // remove the common prefix
+                        //     while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
+                        //         last_longest_chain.remove(0);
+                        //         longest_chain.remove(0);
+                        //     }
+                        //     let mut blocks = Vec::new();
+                        //     // update the state
+                        //     for blk_hash in longest_chain {
+                        //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                        //         blocks.push(block);
+                        //     }
+                        //     // self.state.lock().unwrap().update_blocks(&blocks);
+                            
+                        //     // remove txns from mempool
+                        //     for b in blocks {
+                        //         let txns = b.content.data;
+                        //         self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                        //     }
+
+                        //     // add txns back to the mempool
+                        //     for blk_hash in last_longest_chain {
+                        //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                        //         let txns = block.content.data.clone();
+                        //         self.mempool.lock().unwrap().extend(txns);
+                        //     }
+                        //     //clean up mempool
+                        //     // let mem_snap = self.mempool.lock().unwrap().clone();
+                        //     // let mem_size = mem_snap.len();
+                        //     // let txns = mem_snap.to_vec();
+                        //     // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
+                        //     // if self.state.lock().unwrap().check_block(&temp_tip) {
+                        //     //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                        //     //     let mut invalid_txns = Vec::new();
+                        //     //     for txn in txns {
+                        //     //         let copy = txn.clone();
+                        //     //         let pubk = copy.sign.pubk.clone();
+                        //     //         let nonce = copy.transaction.nonce.clone();
+                        //     //         let value = copy.transaction.value.clone();
+
+                        //     //         let sender: H160 = compute_key_hash(pubk).into();
+                        //     //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                        //     //         if s_nonce >= nonce {
+                        //     //             invalid_txns.push(copy.clone());
+                        //     //         }
+                        //     //     }
+                        //     //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
+                        //     // }
+                            
+                        // } else {
+                        //     // longest chain not change
+                        //     //self.state.lock().unwrap().update_block(&blk);
+                        //     // add txns back to the mempool
+                        //     //let txns = blk.content.data.clone();
+                        //     //self.mempool.lock().unwrap().extend(txns);
+                        // }
+
+                        // copy.print_txns();
+                        //info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                        info!("Total Number of PoW Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pow());
+                        // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
+                        let last_block = self.blockchain.lock().unwrap().tip();                    
+                        info!("Mempool size: {}", self.mempool.lock().unwrap().len());
+                        // self.state.lock().unwrap().print_last_block_state(&last_block);
+                        //self.blockchain.lock().unwrap().print_longest_chain();
+                        self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
+                        break;
                     }
-                    // let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-
-                    self.all_blocks.lock().unwrap().insert(hash.clone(), blk);
-
-                    // if self.blockchain.lock().unwrap().insert(&blk) {
-                    //     //self.state.lock().unwrap().update_block(&blk);
-                    //     // longest chain changes
-                    //     // update the longest chain
-                    //     let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                    //     longest_chain.reverse();
-                    //     // remove the common prefix
-                    //     while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
-                    //         last_longest_chain.remove(0);
-                    //         longest_chain.remove(0);
-                    //     }
-                    //     let mut blocks = Vec::new();
-                    //     // update the state
-                    //     for blk_hash in longest_chain {
-                    //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                    //         blocks.push(block);
-                    //     }
-                    //     // self.state.lock().unwrap().update_blocks(&blocks);
-                        
-                    //     // remove txns from mempool
-                    //     for b in blocks {
-                    //         let txns = b.content.data;
-                    //         self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                    //     }
-
-                    //     // add txns back to the mempool
-                    //     for blk_hash in last_longest_chain {
-                    //         let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                    //         let txns = block.content.data.clone();
-                    //         self.mempool.lock().unwrap().extend(txns);
-                    //     }
-                    //     //clean up mempool
-                    //     // let mem_snap = self.mempool.lock().unwrap().clone();
-                    //     // let mem_size = mem_snap.len();
-                    //     // let txns = mem_snap.to_vec();
-                    //     // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                    //     // if self.state.lock().unwrap().check_block(&temp_tip) {
-                    //     //     let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                    //     //     let mut invalid_txns = Vec::new();
-                    //     //     for txn in txns {
-                    //     //         let copy = txn.clone();
-                    //     //         let pubk = copy.sign.pubk.clone();
-                    //     //         let nonce = copy.transaction.nonce.clone();
-                    //     //         let value = copy.transaction.value.clone();
-
-                    //     //         let sender: H160 = compute_key_hash(pubk).into();
-                    //     //         let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                    //     //         if s_nonce >= nonce {
-                    //     //             invalid_txns.push(copy.clone());
-                    //     //         }
-                    //     //     }
-                    //     //     self.mempool.lock().unwrap().retain(|txn| !invalid_txns.contains(txn));
-                    //     // }
-                        
-                    // } else {
-                    //     // longest chain not change
-                    //     //self.state.lock().unwrap().update_block(&blk);
-                    //     // add txns back to the mempool
-                    //     //let txns = blk.content.data.clone();
-                    //     //self.mempool.lock().unwrap().extend(txns);
-                    // }
-
-                    // copy.print_txns();
-                    //info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
-                    info!("Total Number of PoW Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pow());
-                    // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
-                    let last_block = self.blockchain.lock().unwrap().tip();                    
-                    info!("Mempool size: {}", self.mempool.lock().unwrap().len());
-                    // self.state.lock().unwrap().print_last_block_state(&last_block);
-                    //self.blockchain.lock().unwrap().print_longest_chain();
-                    self.server.broadcast(Message::NewBlockHashes(vec![hash]));
-                    break;
                 }
             }
 
@@ -308,7 +344,7 @@ impl Context {
                 //info!("mining rate {} block/s", rate);
                 let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                 for blk_hash in longest_chain {
-                    let ts = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap().header.timestamp;
+                    let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
                     println!("{}",ts)
                 }
 

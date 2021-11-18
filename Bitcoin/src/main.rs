@@ -93,6 +93,9 @@ fn main() {
 
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
+    // create mienr update channels
+    let (context_update_send, context_update_recv) = channel::unbounded();
+
 
     // start the p2p server
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();
@@ -184,6 +187,7 @@ fn main() {
             &mempool,
             &all_txns,
             &state,
+            context_update_send.clone(),
         );
         worker_ctx.start();
     }
@@ -202,7 +206,10 @@ fn main() {
 
     // start the miner
     let (miner_ctx, miner) = miner::new(
-        &blockchain, &server,
+        &blockchain,
+        context_update_recv,
+        context_update_send,
+        &server,
         &mempool,
         &state,
         &all_blocks,

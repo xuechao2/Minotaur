@@ -1,4 +1,5 @@
 use crate::crypto::merkle::{MerkleTree, verify};
+use crate::miner;
 use crate::state::{State,compute_key_hash,transaction_check};
 use crate::transaction::verify_signedtxn;
 use crate::transaction::SignedTransaction;
@@ -40,6 +41,7 @@ pub struct Context {
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: Arc<Mutex<State>>,
     tranpool: Arc<Mutex<Vec<H256>>>,  
+    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
 }
 
 pub fn new(
@@ -54,6 +56,7 @@ pub fn new(
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
+    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -67,6 +70,7 @@ pub fn new(
         all_txns: Arc::clone(all_txns),
         state: Arc::clone(state),
         tranpool: Arc::clone(tranpool),
+        context_update_send,
     }
 }
 
@@ -249,6 +253,8 @@ impl Context {
                                             }
                                         }
                                     }
+                                    // tell the miner to update the context
+                                    self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
                                 }
                                 Err(e) => {
                                     println!("VRF proof is not valid: {}", e);
@@ -289,6 +295,8 @@ impl Context {
                                         self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                     }
                                 }
+                                // tell the miner to update the context
+                                self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
                             }
                         }
 
