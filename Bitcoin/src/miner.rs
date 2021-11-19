@@ -225,6 +225,7 @@ impl Context {
 
 
                         if self.blockchain.lock().unwrap().insert(&blk) {
+                            self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                             //self.state.lock().unwrap().update_block(&blk);
                             // longest chain changes
                             // update the longest chain
@@ -298,18 +299,23 @@ impl Context {
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         self.blockchain.lock().unwrap().print_longest_chain();
                         self.server.broadcast(Message::NewBlockHashes(vec![hash]));
-                        self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                         break;
+                    }
+                    if let OperatingState::Run(i) = self.operating_state {
+                        if i != 0 {
+                            let interval = time::Duration::from_micros(i as u64);
+                            thread::sleep(interval);
+                        }
                     }
                 }
             }
 
-            if let OperatingState::Run(i) = self.operating_state {
-                if i != 0 {
-                    let interval = time::Duration::from_micros(i as u64);
-                    thread::sleep(interval);
-                }
-            }
+            // if let OperatingState::Run(i) = self.operating_state {
+            //     if i != 0 {
+            //         let interval = time::Duration::from_micros(i as u64);
+            //         thread::sleep(interval);
+            //     }
+            // }
             let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
             if time > 600 {
                 //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
