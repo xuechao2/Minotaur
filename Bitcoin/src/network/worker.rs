@@ -187,6 +187,9 @@ impl Context {
                                 // }                           
                                 let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                                 if self.blockchain.lock().unwrap().insert(&blk) {
+                                    // tell the miner to update the context
+                                    self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
+
                                     //self.state.lock().unwrap().update_block(&blk);
                                     // longest chain changes
                                     // update the longest chain
@@ -241,8 +244,6 @@ impl Context {
                                     self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                 }
                             }
-                            // tell the miner to update the context
-                            self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
                         }
                 
                     }
