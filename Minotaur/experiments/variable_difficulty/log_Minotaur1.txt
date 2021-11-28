@@ -1,5 +1,0 @@
-epoch_size: 500 
-epoch_time: 120_000_000
-difficulty: <H256>::from([0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-Start with 2 nodes, lambda=5000
-Duration: 10 mins

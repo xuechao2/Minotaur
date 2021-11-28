@@ -22,7 +22,7 @@ count = []
 expected = []
 for n in timeline:
 	count.append(len([i for i in ts if i < 1000*n]))
-	expected.append(500)
+	expected.append(400)
 
 fig, ax = plt.subplots()
 ax.plot(timeline,count,'-b')

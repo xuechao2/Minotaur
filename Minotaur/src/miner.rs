@@ -205,7 +205,7 @@ impl Context {
             let mut rng = rand::thread_rng();
             let transaction_ref: Vec<H256> = Default::default();
             // add txns from mempool to from a block
-            let txn_number = 256;
+            let txn_number = 32;
 
             let rand: u128 = Default::default();  // TODO: update rand every epoch
             //let ts_slice = ts.to_be_bytes();
@@ -345,7 +345,7 @@ impl Context {
                 let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                 for blk_hash in longest_chain {
                     let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
-                    println!("{}",ts)
+                    println!("Blockchain timestamps: {}",ts)
                 }
 
                 break;

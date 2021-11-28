@@ -40,7 +40,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:500, epoch_time: 120_000_000,genesis_time: initial_time}
+		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:400, epoch_time: 120_000_000,genesis_time: initial_time}
 	
     }
 
@@ -145,7 +145,7 @@ impl Blockchain {
 				// 	ratio = 0.25;
 				// }
 				let new_diff:H256 = hash_divide_by(&old_diff,ratio);
-				//println!("Mining difficulty changes from {} to {}",old_diff, new_diff);
+				println!("Mining difficulty changes from {} to {}",old_diff, new_diff);
 				new_diff
 			} else {
 				self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty
@@ -219,7 +219,7 @@ impl Blockchain {
 			}
 			all_block.push(current_hash);
 			current_hash = parentdata.blk.header.parent;
-			debug!("current_hash {:?}!", current_hash);
+			// debug!("current_hash {:?}!", current_hash);
 			// debug!("contains {:?}!", self.chain.get(&current_hash));
 			
 		}
@@ -243,7 +243,7 @@ impl Blockchain {
 			}
 			all_block.push(current_hash);
 			current_hash = parentdata.blk.header.parent;
-			debug!("current_hash {:?}!", current_hash);
+			// debug!("current_hash {:?}!", current_hash);
 			// debug!("contains {:?}!", self.chain.get(&current_hash));
 			
 		}

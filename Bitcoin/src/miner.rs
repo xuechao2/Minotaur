@@ -184,7 +184,7 @@ impl Context {
             // let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             // add txns from mempool to from a block
-            let txn_number = 256;
+            let txn_number = 32;
 
             let transaction_ref = Default::default();
             let rand: u128 = Default::default();  // TODO: update rand every epoch
@@ -297,7 +297,7 @@ impl Context {
                         let last_block = self.blockchain.lock().unwrap().tip();                    
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
-                        self.blockchain.lock().unwrap().print_longest_chain();
+                        //self.blockchain.lock().unwrap().print_longest_chain();
                         self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                         break;
                     }
@@ -326,7 +326,7 @@ impl Context {
                 let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
                 for blk_hash in longest_chain {
                     let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
-                    println!("{}",ts)
+                    println!("Block timestamps: {}",ts)
                 }
 
                 break;
