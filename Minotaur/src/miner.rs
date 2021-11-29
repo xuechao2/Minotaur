@@ -326,15 +326,21 @@ impl Context {
                         self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                         break;
                     }
+                    if let OperatingState::Run(i) = self.operating_state {
+                        if i != 0 {
+                            let interval = time::Duration::from_micros(i as u64);
+                            thread::sleep(interval);
+                        }
+                    }
                 }
             }
 
-            if let OperatingState::Run(i) = self.operating_state {
-                if i != 0 {
-                    let interval = time::Duration::from_micros(i as u64);
-                    thread::sleep(interval);
-                }
-            }
+            // if let OperatingState::Run(i) = self.operating_state {
+            //     if i != 0 {
+            //         let interval = time::Duration::from_micros(i as u64);
+            //         thread::sleep(interval);
+            //     }
+            // }
             let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
             if time > 600 {
                 //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());

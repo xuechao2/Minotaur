@@ -147,7 +147,7 @@ pub fn generate_genesis_block(initial_time:u128) -> Block {
         nonce: Default::default(),
         //pow_difficulty: <H256>::from([1; 32]), 
         pow_difficulty: <H256>::from([
-            0, 0, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ]),
         pos_difficulty: <H256>::from([1; 32]), 

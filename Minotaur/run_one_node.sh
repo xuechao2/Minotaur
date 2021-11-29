@@ -9,8 +9,8 @@ pid="$!"
 echo "Node started as process $pid"
 echo "Wait 2s, then start all threads"
 sleep 2
-curl -s http://127.0.0.1:7000/tx-generator/start?theta=10000 > /dev/null
-curl -s http://127.0.0.1:7000/miner/start?lambda=250 > /dev/null
+curl -s http://127.0.0.1:7000/tx-generator/start?theta=15000 > /dev/null
+curl -s http://127.0.0.1:7000/miner/start?lambda=240 > /dev/null
 curl -s http://127.0.0.1:7000/staker/start?zeta=100 > /dev/null
 
 sleep 120
