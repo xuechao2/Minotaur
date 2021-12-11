@@ -14,6 +14,7 @@ pub mod network;
 pub mod transaction;
 pub mod txgenerator;
 pub mod state;
+pub mod spam_recorder;
 
 use crate::crypto::hash::Hashable;
 use std::collections::{HashMap, HashSet};
@@ -34,7 +35,7 @@ use ring::signature::Ed25519KeyPair;
 use vrf::openssl::{CipherSuite, ECVRF};
 use vrf::VRF;  
 
-
+use crate::spam_recorder::SpamRecorder;
 
 fn main() {
     // parse command line arguments
@@ -50,6 +51,8 @@ fn main() {
      //(@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
      (@arg vrf_secret_key: --sk [String] "Secret key to be used to print or validate proof" )
      (@arg initial_time: --ts [u128] "Timestamp of the genesis block" )
+     (@arg txn_numerator: --txnn [usize] default_value("1") "txn generator numerator, range: [0,denominator)" )
+     (@arg txn_denominator: --txnd [usize] default_value("1") "txn generator denominator" )
     )
     .get_matches();
 
@@ -113,6 +116,23 @@ fn main() {
             process::exit(1);
         });
 
+    let txnn= matches
+        .value_of("txn_numerator")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_numerator: {}", e);
+            process::exit(1);
+        });
+    let txnd= matches
+        .value_of("txn_denominator")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_denominator: {}", e);
+            process::exit(1);
+        });
+
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels (useless in minotaur, use fake)
@@ -143,6 +163,7 @@ fn main() {
     let mut mempool = Vec::new();
     let mut tranpool = Vec::new();
     let mut all_txns = HashMap::new();
+    let spam_recorder = SpamRecorder::new();
     let mut state = state::State::new();
     let blockchain = Arc::new(std::sync::Mutex::new(blockchain));
     let buffer = Arc::new(std::sync::Mutex::new(buffer));
@@ -151,10 +172,11 @@ fn main() {
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
     let tranpool = Arc::new(std::sync::Mutex::new(tranpool));
     let all_txns = Arc::new(std::sync::Mutex::new(all_txns));
+    let spam_recorder= Arc::new(std::sync::Mutex::new(spam_recorder));
 
     // ico 
-    // let ico_account_number = 900;
-    // let keypairs = state::create_ico_keys(ico_account_number);
+    let ico_account_number = 2;
+    let keypairs = state::create_ico_keys(ico_account_number);
     // let accounts = state::create_ico_accounts(keypairs);
     // let amount = 10000;
     //let genesis_block = block::generate_genesis_block();
@@ -212,6 +234,7 @@ fn main() {
             &delays,
             &mempool,
             &all_txns,
+            &spam_recorder,
             &state,
             &tranpool,
             context_update_send.clone(),
@@ -226,8 +249,10 @@ fn main() {
         &mempool,
         &all_txns,
         &state,
-        //&keypairs,
+        keypairs,
         //&accounts,
+        txnn,
+        txnd,
     );
     txgenerator_ctx.start();
 
@@ -238,6 +263,7 @@ fn main() {
         fake_send,
         &server,
         &mempool,
+        &spam_recorder,
         &state,
         &all_blocks,
         &tranpool,
@@ -303,6 +329,7 @@ fn main() {
         &txgenerator,
         &server,
         &spv,
+        &blockchain,
         //&fly,
     );
 

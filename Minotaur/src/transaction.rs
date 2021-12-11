@@ -116,6 +116,21 @@ pub fn generate_valid_signed_transaction(recv: H160, value: usize, nonce: usize,
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Serialize)]
+pub struct SpamId {
+    pub nonce: usize,
+    pub pubk: String,
+}
+
+impl std::convert::From<&SignedTransaction> for SpamId {
+    fn from(t: &SignedTransaction) -> Self {
+        let hash: H256 = t.sign.pubk.clone().into();
+        SpamId {
+            nonce: t.transaction.nonce,
+            pubk: hash.to_string(),
+        }
+    }
+}
 
 #[cfg(any(test, test_utilities))]
 mod tests {

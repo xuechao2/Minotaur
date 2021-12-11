@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::spam_recorder::SpamRecorder;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
 use crate::block::generate_pow_block;
@@ -11,6 +12,7 @@ use crate::blockchain::Blockchain;
 use crate::network::message::Message;
 use crate::state::{State,transaction_check,compute_key_hash};
 
+use log::debug;
 use log::info;
 use std::sync::{Arc, Mutex};
 
@@ -48,6 +50,7 @@ pub struct Context {
     context_update_send: Sender<ContextUpdateSignal>,
     server: ServerHandle,
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
+    spam_recorder: Arc<Mutex<SpamRecorder>>,
     state: Arc<Mutex<State>>,
     all_blocks: Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: Arc<Mutex<Vec<H256>>>,
@@ -67,6 +70,7 @@ pub fn new(
     context_update_send: Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
+    spam_recorder: &Arc<Mutex<SpamRecorder>>,
     state: &Arc<Mutex<State>>,
     all_blocks: &Arc<Mutex<HashMap<H256,Block>>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
@@ -83,6 +87,7 @@ pub fn new(
         context_update_send,
         server: server.clone(),
         mempool: Arc::clone(mempool),
+        spam_recorder: Arc::clone(spam_recorder),
         state: Arc::clone(state),
         all_blocks: Arc::clone(all_blocks),
         tranpool: Arc::clone(tranpool),
@@ -196,7 +201,7 @@ impl Context {
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
             if current_epoch > epoch {
                 let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
-                println!("Epoch {}: Mining difficulty changes from {} to {}",current_epoch,old_diff, pow_difficulty);
+                debug!("Epoch {}: Mining difficulty changes from {} to {}",current_epoch,old_diff, pow_difficulty);
                 epoch = current_epoch;
             }
             let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
@@ -217,14 +222,44 @@ impl Context {
 
 
             let (enough_txn, data) = {
-                let mem_snap = self.mempool.lock().unwrap();
-                let mem_size = mem_snap.len(); 
-                if mem_size >= txn_number { 
-                    let data: Vec<SignedTransaction> = mem_snap.iter().take(txn_number).cloned().collect();
+                let mut mem_snap = self.mempool.lock().unwrap();
+                let mut spam_recorder= self.spam_recorder.lock().unwrap();
+                let mut data: Vec<SignedTransaction> = vec![];
+                let mut remove_index = vec![];
+                let mut spam_buffer = SpamRecorder::new();
+                let mut last_index = mem_snap.len()-1;
+                for (index, txn) in mem_snap.iter().enumerate() {
+                    // filter out spam txn
+                    if spam_recorder.test(txn) && spam_buffer.test_and_set(txn) {
+                        data.push(txn.clone());
+                        if data.len() >= txn_number {
+                            last_index = index;
+                            break
+                        }
+                    } else {
+                        remove_index.push(index);
+                    }
+                }
+                if data.len() >= txn_number {
+                    info!("[Spam]Collect {} txns, filter {} spam", data.len(), remove_index.len());
+                    mem_snap.iter().take(last_index+1).for_each(|txn|{spam_recorder.test_and_set(txn);})
+                }
+                // remove txn that already recorded (hence is spam)
+                for index in remove_index.into_iter().rev() {
+                    mem_snap.swap_remove(index);
+                }
+                if data.len() >= txn_number {
                     (true, data)
                 } else {
                     (false, vec![])
                 }
+                // let mem_size = mem_snap.len(); 
+                // if mem_size >= txn_number { 
+                //     let data: Vec<SignedTransaction> = mem_snap.iter().take(txn_number).cloned().collect();
+                //     (true, data)
+                // } else {
+                //     (false, vec![])
+                // }
             };
 
             if enough_txn {
@@ -357,5 +392,42 @@ impl Context {
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{transaction::{Transaction, SignedTransaction, generate_random_signed_transaction}, spam_recorder::SpamRecorder};
+
+    #[test]
+    fn spam() {
+        let txn_number = 2;
+        let tx1 = generate_random_signed_transaction();
+        let tx_ = Transaction {value: 19999, ..tx1.transaction.clone()};
+        let tx2 = SignedTransaction {transaction: tx_, ..tx1.clone()};
+        let tx_ = Transaction {value: 29999, ..tx1.transaction.clone()};
+        let tx3 = SignedTransaction {transaction: tx_, ..tx1.clone()};
+        let tx_ = Transaction {value: 39999, ..tx1.transaction.clone()};
+        let tx4 = SignedTransaction {transaction: tx_, ..tx1.clone()};
+        let mut mem_snap = vec![tx1, tx2, tx3, tx4];
+        let mut spam_recorder = SpamRecorder::new();
+        let mut data: Vec<SignedTransaction> = vec![];
+        let mut remove_index = vec![];
+        for (index, txn) in mem_snap.iter().enumerate() {
+            if spam_recorder.test_and_set(txn) {
+                data.push(txn.clone());
+                if data.len() >= txn_number {
+                    break
+                }
+            } else {
+                remove_index.push(index);
+            }
+        }
+        // remove txn that already recorded (hence is spam)
+        for index in remove_index.into_iter().rev() {
+            mem_snap.swap_remove(index);
+        }
+        assert_eq!(data.len(),1);
+        assert_eq!(mem_snap.len(),1);
     }
 }

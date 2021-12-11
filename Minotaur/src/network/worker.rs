@@ -1,5 +1,6 @@
 use crate::crypto::merkle::{MerkleTree, verify};
 use crate::staker;
+use crate::spam_recorder::SpamRecorder;
 use crate::state::{State,compute_key_hash,transaction_check};
 use crate::transaction::verify_signedtxn;
 use crate::transaction::SignedTransaction;
@@ -39,6 +40,7 @@ pub struct Context {
     delays: Arc<Mutex<Vec<u128>>>,
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
+    spam_recorder: Arc<Mutex<SpamRecorder>>,
     state: Arc<Mutex<State>>,
     tranpool: Arc<Mutex<Vec<H256>>>,  
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
@@ -54,6 +56,7 @@ pub fn new(
     time: &Arc<Mutex<Vec<u128>>>,
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
+    spam_recorder: &Arc<Mutex<SpamRecorder>>,
     state: &Arc<Mutex<State>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
@@ -68,6 +71,7 @@ pub fn new(
         delays: Arc::clone(time),
         mempool: Arc::clone(mempool),
         all_txns: Arc::clone(all_txns),
+        spam_recorder: Arc::clone(spam_recorder),
         state: Arc::clone(state),
         tranpool: Arc::clone(tranpool),
         context_update_send,
@@ -266,6 +270,10 @@ impl Context {
                                     self.blockchain.lock().unwrap().insert_pow(&blk);
                                     let txns = blk.content.data.clone();
                                     let hash = blk.hash().clone();
+                                    {
+                                        let mut spam_recorder = self.spam_recorder.lock().unwrap();
+                                        txns.iter().for_each(|txn|{spam_recorder.test_and_set(txn);});
+                                    }
                                     self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
                                     if !self.tranpool.lock().unwrap().contains(&hash){
                                         self.tranpool.lock().unwrap().push(hash);
