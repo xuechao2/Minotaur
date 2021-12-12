@@ -22,7 +22,7 @@ use clap::clap_app;
 use crossbeam::channel;
 use log::{error, info};
 use api::Server as ApiServer;
-use network::{server, worker, spv_worker};
+use network::{server, worker, spv_worker,selfish_worker};
 use std::net;
 use std::process;
 use std::thread;
@@ -44,6 +44,7 @@ fn main() {
      (@arg p2p_workers: --("p2p-workers") [INT] default_value("4") "Sets the number of worker threads for P2P server")
      (@arg spv_client: --spv [BOOL] default_value("false") "Whether spv client or full node") // false for full node, true for spv client
      //(@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
+     (@arg selfish_node: --selfish [BOOL] default_value("false") "Whether selfish or honest node") // false for honest node, true for selfish node
     )
     .get_matches();
 
@@ -53,6 +54,15 @@ fn main() {
         .parse::<bool>()
         .unwrap_or_else(|e| {
             error!("Error parsing SPV client: {}", e);
+            process::exit(1);
+        });
+
+    let selfish_node = matches
+        .value_of("selfish_node")
+        .unwrap()
+        .parse::<bool>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing selfish miner: {}", e);
             process::exit(1);
         });
 
@@ -95,6 +105,7 @@ fn main() {
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels
     let (context_update_send, context_update_recv) = channel::unbounded();
+    let (selfish_context_update_send, selfish_context_update_recv) = channel::unbounded();
 
 
     // start the p2p server
@@ -175,6 +186,21 @@ fn main() {
     //         //&longestchain,
     //     );
     //     fly_worker_ctx.start();
+    } else if selfish_node {
+        let selfish_worker_ctx = selfish_worker::new(
+            p2p_workers,
+            msg_rx,
+            &server,
+            &blockchain,
+            &buffer,
+            &all_blocks,
+            &delays,
+            &mempool,
+            &all_txns,
+            &state,
+            selfish_context_update_send.clone(),
+        );
+        selfish_worker_ctx.start();
     } else {
         let worker_ctx = worker::new(
             p2p_workers,
@@ -213,8 +239,10 @@ fn main() {
         &mempool,
         &state,
         &all_blocks,
+        selfish_node,
     );
     miner_ctx.start();
+   
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -252,13 +280,14 @@ fn main() {
 
     // start the API server
     ApiServer::start(
-        api_addr,
-        &miner,
-        &txgenerator,
-        &server,
-        &spv,
-        //&fly,
-    );
+            api_addr,
+            &miner,
+            &txgenerator,
+            &server,
+            &spv,
+            //&fly,
+        );
+    
 
     loop {
         std::thread::park();

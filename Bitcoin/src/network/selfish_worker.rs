@@ -186,7 +186,8 @@ impl Context {
                                 //     }
                                 // }                           
                                 let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                if self.blockchain.lock().unwrap().insert(&blk,false) {
+                                let last_lead = self.blockchain.lock().unwrap().get_lead();
+                                if self.blockchain.lock().unwrap().insert(&blk,true) {
                                     // tell the miner to update the context
                                     self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
 
@@ -220,6 +221,12 @@ impl Context {
                                     }
 
                                 } 
+                                let new_lead = self.blockchain.lock().unwrap().get_lead();
+                                if new_lead < last_lead {
+                                    let selfish_blk = self.blockchain.lock().unwrap().find_one_child_hash(&parent);
+                                    self.server.broadcast(Message::NewBlockHashes(vec![selfish_blk]));
+
+                                }
                             } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
                                 let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
                                 self.buffer.lock().unwrap().remove(&parent);
@@ -263,6 +270,7 @@ impl Context {
                     debug!("Blockchain size {}", self.blockchain.lock().unwrap().get_depth());
 
                     info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                    info!("Longest Public Blockchain Length: {}", self.blockchain.lock().unwrap().get_pub_len());
                     info!("Total Number of Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_size());
                     // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
 
