@@ -69,7 +69,7 @@ impl Blockchain {
 			let mut rng = rand::thread_rng();
 			let p: f64 = rng.gen::<f64>();  // toss a coin
 
-			if newheight > self.depth || (newheight == self.depth && block.selfish_block == true && p < 1.0){
+			if newheight > self.depth || (newheight == self.depth && block.selfish_block == true && p < 0.7){
 				self.depth = newheight;
 				self.tip = newhash;
 				return true;
