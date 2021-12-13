@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 use log::{debug, warn,info};
 use tari_mmr::{MerkleMountainRange, MerkleProof, Hash};
 use sha2::{Digest, Sha256};
+use rand::Rng;
 
 #[derive(Serialize, Deserialize,Hash, Eq, PartialEq, Debug,Clone)]
 pub struct Data {
@@ -38,7 +39,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, epoch_size:400, epoch_time: 120_000_000, pub_len: 0, private_lead: 0}
+		Blockchain{chain, map, tip, depth:0, epoch_size:1000, epoch_time: 1200_000_000, pub_len: 0, private_lead: 0}
 	
     }
 
@@ -64,7 +65,11 @@ impl Blockchain {
 			mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
 			self.chain.insert(newhash,newdata);
 			self.map.insert(newhash, new_mmr);
-			if newheight > self.depth || (newheight == self.depth && block.selfish_block == true){
+
+			let mut rng = rand::thread_rng();
+			let p: f64 = rng.gen::<f64>();  // toss a coin
+
+			if newheight > self.depth || (newheight == self.depth && block.selfish_block == true && p < 1.0){
 				self.depth = newheight;
 				self.tip = newhash;
 				return true;
@@ -246,17 +251,17 @@ impl Blockchain {
 		all_block
 	}
 	
-	pub fn find_one_child_hash(&self,hash:&H256) -> H256 {
+	pub fn find_one_height(&self,height:u128) -> H256 {
 		let mut current_hash = self.tip;
-		let parent_hash: H256 = hash.clone();
+		//let parent_hash: H256 = hash.clone();
 		let mut childdata: Data;
 
 		loop {
 			childdata = self.chain.get(&current_hash).unwrap().clone();
-			current_hash = childdata.blk.header.parent.clone();
-			if current_hash == parent_hash {
+			if childdata.height == height {
 				return childdata.blk.hash().clone();
 			}
+			current_hash = childdata.blk.header.parent.clone();
 			
 		}
 	}
@@ -288,6 +293,28 @@ impl Blockchain {
 			chain.push(self.find_one_block(&hash).unwrap().clone());
 		}
 		chain
+    }
+
+    pub fn get_chain_quality(&self) -> f32 {
+		//unimplemented!()
+		// let mut all_block : Vec<H256> = vec![];
+		let mut current_hash = self.tip;
+		let mut parentdata: Data;
+		let mut count = -1;
+
+		loop {
+			match self.chain.get(&current_hash) {
+				None => break,
+				Some(data) => parentdata = data.clone(),
+			}
+			//all_block.push(current_hash);
+			if parentdata.blk.selfish_block == false {
+				count = count + 1; 
+			}
+			current_hash = parentdata.blk.header.parent;			
+		}
+		let chain_quality:f32 = (count as f32)/(self.get_depth() as f32);
+		chain_quality
     }
 
     pub fn find_one_block(&self,hash: &H256) -> Option<Block> {

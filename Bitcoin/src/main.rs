@@ -62,7 +62,7 @@ fn main() {
         .unwrap()
         .parse::<bool>()
         .unwrap_or_else(|e| {
-            error!("Error parsing selfish miner: {}", e);
+            error!("Error parsing selfish node: {}", e);
             process::exit(1);
         });
 
@@ -105,7 +105,7 @@ fn main() {
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels
     let (context_update_send, context_update_recv) = channel::unbounded();
-    let (selfish_context_update_send, selfish_context_update_recv) = channel::unbounded();
+    // let (selfish_context_update_send, selfish_context_update_recv) = channel::unbounded();
 
 
     // start the p2p server
@@ -198,7 +198,7 @@ fn main() {
             &mempool,
             &all_txns,
             &state,
-            selfish_context_update_send.clone(),
+            context_update_send.clone(),
         );
         selfish_worker_ctx.start();
     } else {
