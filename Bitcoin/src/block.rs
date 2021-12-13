@@ -15,6 +15,7 @@ pub struct Block {
     pub header: Header,
     pub content: Content,
     pub block_type: bool,  // true for PoS, false for PoW
+    pub selfish_block: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug,Hash, Eq, PartialEq,Clone)]
@@ -79,7 +80,7 @@ impl Block {
 
 pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
                       timestamp: u128, //parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, 
-                      vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, vrf_pub_key: &[u8], rand: u128) -> Block {
+                      vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, vrf_pub_key: &[u8], rand: u128, selfish_block: bool) -> Block {
     let mt: MerkleTree = MerkleTree::new(data);
     let block_type = true; 
     let content = Content {
@@ -101,7 +102,8 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
     Block {
         header,
         content,
-        block_type
+        block_type,
+        selfish_block: selfish_block
    }
 }
 
@@ -111,6 +113,7 @@ pub fn generate_genesis_block() -> Block {
         transaction_ref: Default::default(),
     };
     let block_type = true;
+    let selfish_block = false;
     let header = Header {
         parent: Default::default(),
         nonce: Default::default(),
@@ -130,7 +133,8 @@ pub fn generate_genesis_block() -> Block {
     Block {
         header,
         content, 
-        block_type
+        block_type,
+        selfish_block
    }
 }
 

@@ -50,6 +50,7 @@ pub struct Context {
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     state: Arc<Mutex<State>>,
     all_blocks: Arc<Mutex<HashMap<H256,Block>>>,
+    selfish_miner: bool,
 }
 
 #[derive(Clone)]
@@ -66,6 +67,7 @@ pub fn new(
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
     all_blocks: &Arc<Mutex<HashMap<H256,Block>>>,
+    selfish_miner: bool,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -79,6 +81,7 @@ pub fn new(
         mempool: Arc::clone(mempool),
         state: Arc::clone(state),
         all_blocks: Arc::clone(all_blocks),
+        selfish_miner: selfish_miner,
     };
 
     let handle = Handle {
@@ -210,7 +213,7 @@ impl Context {
             };
 
             if enough_txn {
-                let mut blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &vrf_proof, &vrf_hash, &vrf_public_key, rand);
+                let mut blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &difficulty, ts, &vrf_proof, &vrf_hash, &vrf_public_key, rand, self.selfish_miner);
                 loop {
                     // info!("Start mining!");
                     handle_context_update!(blk);
@@ -224,7 +227,7 @@ impl Context {
                         let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
 
 
-                        if self.blockchain.lock().unwrap().insert(&blk) {
+                        if self.blockchain.lock().unwrap().insert(&blk,self.selfish_miner) {
                             self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                             //self.state.lock().unwrap().update_block(&blk);
                             // longest chain changes
@@ -292,13 +295,21 @@ impl Context {
 
                         // copy.print_txns();
                         info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                        if self.selfish_miner {
+                             info!("Longest Public Blockchain Length: {}", self.blockchain.lock().unwrap().get_pub_len());
+                        }
                         info!("Total Number of Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_size());
                         // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
-                        let last_block = self.blockchain.lock().unwrap().tip();                    
+                        // let last_block = self.blockchain.lock().unwrap().tip();                    
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
-                        self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        if !self.selfish_miner {
+                            self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                            if self.blockchain.lock().unwrap().get_depth() % 100 == 0 {
+                                info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
+                            }
+                        }
                         break;
                     }
                     if let OperatingState::Run(i) = self.operating_state {
@@ -316,21 +327,21 @@ impl Context {
             //         thread::sleep(interval);
             //     }
             // }
-            let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
-            if time > 600 {
-                //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
+            // let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
+            // if time > 600 {
+            //     //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
 
-                //info!("{} seconds elapsed", time);
-                //let rate = 100000/time;
-                //info!("mining rate {} block/s", rate);
-                let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                for blk_hash in longest_chain {
-                    let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
-                    println!("Block timestamps: {}",ts)
-                }
+            //     //info!("{} seconds elapsed", time);
+            //     //let rate = 100000/time;
+            //     //info!("mining rate {} block/s", rate);
+            //     let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+            //     for blk_hash in longest_chain {
+            //         let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
+            //         println!("Block timestamps: {}",ts)
+            //     }
 
-                break;
-            }
+            //     break;
+            // }
         }
     }
 }
