@@ -36,11 +36,16 @@ enum OperatingState {
     ShutDown,
 }
 
+pub enum ContextUpdateSignal {
+    NewPosBlock,
+}
 pub struct Context {
     /// Channel for receiving control signal
     blockchain: Arc<Mutex<Blockchain>>,
     control_chan: Receiver<ControlSignal>,
     operating_state: OperatingState,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: Sender<ContextUpdateSignal>,
     server: ServerHandle,
     //mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     state: Arc<Mutex<State>>,
@@ -58,6 +63,8 @@ pub struct Handle {
 
 pub fn new(
     blockchain: &Arc<Mutex<Blockchain>>,
+    context_update_recv: Receiver<ContextUpdateSignal>,
+    context_update_send: Sender<ContextUpdateSignal>,
     server: &ServerHandle,
     //mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
@@ -72,6 +79,8 @@ pub fn new(
         blockchain: Arc::clone(blockchain),
         control_chan: signal_chan_receiver,
         operating_state: OperatingState::Paused,
+        context_update_recv,
+        context_update_send,
         server: server.clone(),
         //mempool: Arc::clone(mempool),
         state: Arc::clone(state),
@@ -133,6 +142,7 @@ impl Context {
         // let vrf_secret_key =
         //     hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();   //TODO: use different vrf key pairs in different nodes
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+        
         // main mining loop
         loop {
             // check and react to control signals
@@ -160,10 +170,10 @@ impl Context {
             // TODO: actual mining
 
 
-            let parent = self.blockchain.lock().unwrap().tip();
-            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
-            let pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+            let mut parent = self.blockchain.lock().unwrap().tip();
+            let mut ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+            let mut pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+            let mut pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();
@@ -172,13 +182,13 @@ impl Context {
             let mut enough_txn_block = false;
 
             let mut transaction_ref: Vec<H256> = Vec::new();
-            let rand: u128 = Default::default();  // TODO: update rand every epoch
+            let mut rand: u128 = Default::default();  // TODO: update rand every epoch
             let ts_slice = ts.to_be_bytes();
             let rand_slice = rand.to_be_bytes();
             let message = [rand_slice,ts_slice].concat();
             // VRF proof and hash output
-            let vrf_proof = vrf.prove(&self.vrf_secret_key, &message).unwrap();
-            let vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+            let mut vrf_proof = vrf.prove(&self.vrf_secret_key, &message).unwrap();
+            let mut vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
 
 
 
@@ -206,6 +216,30 @@ impl Context {
             if enough_txn_block {
                 // info!("Start mining!");
 
+                // update context
+                {
+                    let mut new_block: bool = false;
+                    for sig in self.context_update_recv.try_iter() {
+                        match sig {
+                            ContextUpdateSignal::NewPosBlock=> {
+                                new_block = true;
+                            }
+                        }
+                    }
+                    if new_block {
+                        parent = self.blockchain.lock().unwrap().tip();
+                        ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+                        pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+                        rand = Default::default();  // TODO: update rand every epoch
+                        let ts_slice = ts.to_be_bytes();
+                        let rand_slice = rand.to_be_bytes();
+                        let message = [rand_slice,ts_slice].concat();
+                        // VRF proof and hash output
+                        vrf_proof = vrf.prove(&self.vrf_secret_key, &message).unwrap();
+                        vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+                    }
+                }
                 let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
                       &self.vrf_public_key, rand);
                 let vrf_hash_bytes: &[u8] = &vrf_hash;
@@ -298,6 +332,7 @@ impl Context {
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // self.blockchain.lock().unwrap().print_longest_chain();
                     self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
+                    self.context_update_send.send(ContextUpdateSignal::NewPosBlock).unwrap();
                     //break;
                 }
             }

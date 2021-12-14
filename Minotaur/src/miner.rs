@@ -143,7 +143,6 @@ impl Context {
         // let vrf_secret_key =
         //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
-        // main mining loop
         macro_rules! handle_context_update {
             ($blk:expr) => {
                 {
@@ -165,7 +164,7 @@ impl Context {
                 }
             };
         }
-        
+        // main mining loop
         loop {
             // check and react to control signals
             match self.operating_state {

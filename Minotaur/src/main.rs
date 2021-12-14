@@ -115,7 +115,9 @@ fn main() {
 
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
-    // create mienr update channels
+    // create mienr update channels (useless in minotaur, use fake)
+    let (fake_send, fake_recv) = channel::unbounded();
+    // create staker update channels
     let (context_update_send, context_update_recv) = channel::unbounded();
 
     // start the p2p server
@@ -231,8 +233,8 @@ fn main() {
     // start the miner
     let (miner_ctx, miner) = miner::new(
         &blockchain,
-        context_update_recv,
-        context_update_send,
+        fake_recv,
+        fake_send,
         &server,
         &mempool,
         &state,
@@ -245,7 +247,10 @@ fn main() {
 
     // start the staker
     let (staker_ctx, staker) = staker::new(
-        &blockchain, &server,
+        &blockchain,
+        context_update_recv,
+        context_update_send,
+        &server,
         //&mempool,
         &state,
         &all_blocks,

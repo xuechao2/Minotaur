@@ -1,5 +1,5 @@
 use crate::crypto::merkle::{MerkleTree, verify};
-use crate::miner;
+use crate::staker;
 use crate::state::{State,compute_key_hash,transaction_check};
 use crate::transaction::verify_signedtxn;
 use crate::transaction::SignedTransaction;
@@ -41,7 +41,7 @@ pub struct Context {
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: Arc<Mutex<State>>,
     tranpool: Arc<Mutex<Vec<H256>>>,  
-    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
+    context_update_send: channel::Sender<staker::ContextUpdateSignal>,
 }
 
 pub fn new(
@@ -56,7 +56,7 @@ pub fn new(
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
-    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
+    context_update_send: channel::Sender<staker::ContextUpdateSignal>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -253,8 +253,8 @@ impl Context {
                                             }
                                         }
                                     }
-                                    // tell the miner to update the context
-                                    self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
+                                    // tell the staker to update the context
+                                    self.context_update_send.send(staker::ContextUpdateSignal::NewPosBlock).unwrap();
                                 }
                                 Err(e) => {
                                     println!("VRF proof is not valid: {}", e);
@@ -295,8 +295,6 @@ impl Context {
                                         self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                     }
                                 }
-                                // tell the miner to update the context
-                                self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
                             }
                         }
 
