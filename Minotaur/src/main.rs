@@ -116,7 +116,8 @@ fn main() {
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels (useless in minotaur, use fake)
-    let (fake_send, fake_recv) = channel::unbounded();
+    let (fake_send, _) = channel::unbounded();
+    let fake_recv = channel::never();
     // create staker update channels
     let (context_update_send, context_update_recv) = channel::unbounded();
 
