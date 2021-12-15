@@ -322,7 +322,8 @@ impl Context {
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
                         self.server.broadcast(Message::NewBlockHashes(vec![hash]));
-                        self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
+                        // in minotaur, context update signal for pow block is useless
+                        // self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                         break;
                     }
                     if let OperatingState::Run(i) = self.operating_state {
