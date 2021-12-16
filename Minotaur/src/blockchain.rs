@@ -357,7 +357,7 @@ impl Blockchain {
 			
 			current_hash = parentdata.blk.header.parent;			
 		}
-		let chain_quality:f32 = (count_selfish as f32)/(count as f32);
+		let chain_quality:f32 = 1.0 - (count_selfish as f32)/(count as f32);
 		chain_quality
     }
 

@@ -340,7 +340,7 @@ impl Context {
                     // self.blockchain.lock().unwrap().print_longest_chain();
                     if !self.selfish_staker {
                         self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
-                        if self.blockchain.lock().unwrap().get_depth() % 10 == 0 {
+                        if self.blockchain.lock().unwrap().get_depth() % 100 == 0 {
                             info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
                         }
                     }

@@ -377,6 +377,10 @@ impl Context {
                     let last_block = self.blockchain.lock().unwrap().tip();                    
                     info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                     info!("tranpool size: {}", self.tranpool.lock().unwrap().len());
+
+                    if self.blockchain.lock().unwrap().get_depth() % 100 == 0 {
+                        info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
+                    }    
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // debug!("Total Block Delay:{}", total_delay);
                     // info!("Avg Block Delay:{}", total_delay/size);
