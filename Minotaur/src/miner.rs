@@ -57,6 +57,7 @@ pub struct Context {
     tranpool: Arc<Mutex<Vec<H256>>>,
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
+    selfish_miner: bool,
 }
 
 #[derive(Clone)]
@@ -77,6 +78,7 @@ pub fn new(
     tranpool: &Arc<Mutex<Vec<H256>>>,
     vrf_secret_key: &Vec<u8>,
     vrf_public_key: &Vec<u8>,
+    selfish_miner: bool,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -94,6 +96,7 @@ pub fn new(
         tranpool: Arc::clone(tranpool),
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
+        selfish_miner: selfish_miner,
     };
 
     let handle = Handle {
@@ -174,7 +177,7 @@ impl Context {
                         }
                     }
                     if data.len() >= txn_number {
-                        info!("[Spam]Collect {} txns, filter {} spam", data.len(), remove_index.len());
+                        //info!("[Spam]Collect {} txns, filter {} spam", data.len(), remove_index.len());
                         mem_snap.iter().take(last_index+1).for_each(|txn|{spam_recorder.test_and_set(txn);})
                     }
                     // remove txn that already recorded (hence is spam)
@@ -265,7 +268,7 @@ impl Context {
 
             if enough_txn {
                 let mut blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
-                    &self.vrf_public_key, rand);
+                    &self.vrf_public_key, rand, self.selfish_miner);
                 loop {
                     // info!("Start mining!");
                     handle_context_update!(blk); 

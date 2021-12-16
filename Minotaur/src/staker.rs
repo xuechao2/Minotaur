@@ -53,6 +53,7 @@ pub struct Context {
     tranpool: Arc<Mutex<Vec<H256>>>,              //Pool of hash of transaction blocks that are not included yet
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
+    selfish_staker: bool,
 }
 
 #[derive(Clone)]
@@ -72,6 +73,7 @@ pub fn new(
     tranpool: &Arc<Mutex<Vec<H256>>>,
     vrf_secret_key: &Vec<u8>,
     vrf_public_key: &Vec<u8>,
+    selfish_staker: bool,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -88,6 +90,7 @@ pub fn new(
         tranpool: Arc::clone(tranpool),
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
+        selfish_staker: selfish_staker,
     };
 
     let handle = Handle {
@@ -241,7 +244,7 @@ impl Context {
                     }
                 }
                 let blk = generate_pos_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 
-                      &self.vrf_public_key, rand);
+                      &self.vrf_public_key, rand, self.selfish_staker);
                 let vrf_hash_bytes: &[u8] = &vrf_hash;
                 let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
                 //info!("Vrf: {}",vrf_hash_sha256);
@@ -255,7 +258,7 @@ impl Context {
 
                     self.all_blocks.lock().unwrap().insert(blk.hash(), blk.clone());
 
-                    if self.blockchain.lock().unwrap().insert_pos(&blk) {
+                    if self.blockchain.lock().unwrap().insert_pos(&blk, self.selfish_staker) {
                         //self.state.lock().unwrap().update_block(&blk);
                         // longest chain changes
                         // update the longest chain
@@ -279,7 +282,8 @@ impl Context {
                             let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
                             let txn_blocks = block.content.transaction_ref.clone();
                             for txn_block in txn_blocks{
-                                if !self.tranpool.lock().unwrap().contains(&txn_block) {
+                                let selfish = self.blockchain.lock().unwrap().find_one_block(&txn_block).unwrap().clone().selfish_block;
+                                if !self.tranpool.lock().unwrap().contains(&txn_block) && (selfish && !self.selfish_staker) {
                                     self.tranpool.lock().unwrap().push(txn_block);
                                 }
                             }
@@ -325,13 +329,21 @@ impl Context {
 
                     // copy.print_txns();
                     info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                    if self.selfish_staker {
+                         info!("Longest Public Blockchain Length: {}", self.blockchain.lock().unwrap().get_pub_len());
+                    }   
                     info!("Total Number of PoS Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pos());
                     // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
                     let last_block = self.blockchain.lock().unwrap().tip();                    
                     info!("Tranpool size: {}", self.tranpool.lock().unwrap().len());
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // self.blockchain.lock().unwrap().print_longest_chain();
-                    self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
+                    if !self.selfish_staker {
+                        self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
+                        if self.blockchain.lock().unwrap().get_depth() % 10 == 0 {
+                            info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
+                        }
+                    }
                     self.context_update_send.send(ContextUpdateSignal::NewPosBlock).unwrap();
                     //break;
                 }

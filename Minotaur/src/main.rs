@@ -53,6 +53,7 @@ fn main() {
      (@arg initial_time: --ts [u128] "Timestamp of the genesis block" )
      (@arg txn_numerator: --txnn [usize] default_value("1") "txn generator numerator, range: [0,denominator)" )
      (@arg txn_denominator: --txnd [usize] default_value("1") "txn generator denominator" )
+     (@arg selfish_node: --selfish [BOOL] default_value("false") "Whether selfish or honest node") // false for honest node, true for selfish node
     )
     .get_matches();
 
@@ -78,6 +79,15 @@ fn main() {
         .parse::<bool>()
         .unwrap_or_else(|e| {
             error!("Error parsing SPV client: {}", e);
+            process::exit(1);
+        });
+
+    let selfish_node = matches
+        .value_of("selfish_node")
+        .unwrap()
+        .parse::<bool>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing selfish node: {}", e);
             process::exit(1);
         });
 
@@ -222,6 +232,24 @@ fn main() {
     //         //&longestchain,
     //     );
     //     fly_worker_ctx.start();
+    } else if selfish_node {
+        let selfish_worker_ctx = worker::new(
+            p2p_workers,
+            msg_rx,
+            &server,
+            &blockchain,
+            &buffer,
+            &all_blocks,
+            &delays,
+            &mempool,
+            &all_txns,
+            &spam_recorder,
+            &state,
+            &tranpool,
+            context_update_send.clone(),
+            context_update_send_pow.clone(),
+        );
+        selfish_worker_ctx.start();
     } else {
         let worker_ctx = worker::new(
             p2p_workers,
@@ -269,6 +297,7 @@ fn main() {
         &tranpool,
         &vrf_secret_key,
         &vrf_public_key,
+        selfish_node,
     );
     miner_ctx.start();
 
@@ -284,6 +313,8 @@ fn main() {
         &tranpool,
         &vrf_secret_key,
         &vrf_public_key,
+        selfish_node,
+
     );
     staker_ctx.start();
 

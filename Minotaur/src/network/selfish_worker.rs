@@ -184,6 +184,7 @@ impl Context {
                             let message = [rand_slice,ts_slice].concat();
                             let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
                             let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
+
                             let mut unknown_hashes: Vec<H256> = Vec::new(); 
                             
                             if !self.blockchain.lock().unwrap().contains_hash(&parent) {
@@ -197,7 +198,6 @@ impl Context {
                                 }
                             }
 
-
                             match vrf_beta {
                                 Ok(vrf_beta) => {
                                     let vrf_hash_bytes: &[u8] = &blk.header.vrf_hash;
@@ -208,8 +208,10 @@ impl Context {
                                             //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
                                         if unknown_hashes.is_empty() {
                                             //let txn_blocks = blk.content.transaction_ref.clone();
+
                                             let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                            if self.blockchain.lock().unwrap().insert_pos(&blk,false) {
+                                            let last_lead = self.blockchain.lock().unwrap().get_lead();
+                                            if self.blockchain.lock().unwrap().insert_pos(&blk,true) {
                                                 //self.state.lock().unwrap().update_block(&blk);
                                                 // longest chain changes
                                                 // update the longest chain
@@ -237,7 +239,8 @@ impl Context {
                                                     let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
                                                     let txn_blocks = block.content.transaction_ref.clone();
                                                     for txn_block in txn_blocks{
-                                                        if !self.tranpool.lock().unwrap().contains(&txn_block) {
+                                                        let selfish = self.blockchain.lock().unwrap().find_one_block(&txn_block).unwrap().clone().selfish_block;
+                                                        if !self.tranpool.lock().unwrap().contains(&txn_block) && selfish == true{
                                                             self.tranpool.lock().unwrap().push(txn_block);
                                                         }
                                                     }
@@ -247,7 +250,15 @@ impl Context {
                                                 for blk in blocks {
                                                     let txn_blocks = blk.content.transaction_ref;
                                                     self.tranpool.lock().unwrap().retain(|txn_block| !txn_blocks.contains(txn_block));
-                                                }                                               
+                                                }
+     
+                                            }
+                                            let new_lead = self.blockchain.lock().unwrap().get_lead();
+                                            let height = self.blockchain.lock().unwrap().get_pub_len();
+                                            if new_lead < last_lead {
+                                                let selfish_blk = self.blockchain.lock().unwrap().find_one_height(height);
+                                                self.server.broadcast(Message::NewBlockHashes(vec![selfish_blk]));
+
                                             }
                                         // } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
                                         //     let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
@@ -309,7 +320,7 @@ impl Context {
                                 }
                             }
                         } else {
-                            if blk.hash() <= blk.header.pow_difficulty {//&& blk.header.pow_difficulty == self.blockchain.lock().unwrap().get_pow_difficulty(blk.header.timestamp) {
+                            if blk.hash() <= blk.header.pow_difficulty {// && blk.header.pow_difficulty == self.blockchain.lock().unwrap().get_pow_difficulty(blk.header.timestamp) {
                                 if self.blockchain.lock().unwrap().contains_hash(&parent) {
                                     self.blockchain.lock().unwrap().insert_pow(&blk);
                                     let txns = blk.content.data.clone();
@@ -319,7 +330,7 @@ impl Context {
                                         txns.iter().for_each(|txn|{spam_recorder.test_and_set(txn);});
                                     }
                                     self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                    if !self.tranpool.lock().unwrap().contains(&hash){
+                                    if !self.tranpool.lock().unwrap().contains(&hash) && blk.selfish == true{
                                         self.tranpool.lock().unwrap().push(hash);
                                     }
 
