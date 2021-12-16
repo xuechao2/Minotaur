@@ -50,8 +50,10 @@ pub struct Context {
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: Arc<Mutex<State>>,
-    //key_pairs: Vec<Ed25519KeyPair>,
+    key_pairs: Vec<Ed25519KeyPair>,
     //accounts: Vec<H160>,
+    numerator: usize,
+    denominator: usize,
 }
 
 #[derive(Clone)]
@@ -66,8 +68,10 @@ pub fn new(
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
     state: &Arc<Mutex<State>>,
-    //key_pairs: &Vec<Ed25519KeyPair>,
+    key_pairs: Vec<Ed25519KeyPair>,
     //accounts: &Vec<H160>,
+    numerator: usize,
+    denominator: usize,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -79,8 +83,10 @@ pub fn new(
         mempool: Arc::clone(mempool),
         all_txns: Arc::clone(all_txns),
         state: Arc::clone(state),
-        //key_pairs: key_pairs.clone(),
+        key_pairs,
         //accounts: accounts.clone(),
+        numerator,
+        denominator,
     };
 
     let handle = Handle {
@@ -134,6 +140,8 @@ impl Context {
         let start: time::SystemTime = SystemTime::now();
         //let keypairs = create_ico_keys(account_number);
         // main mining loop
+
+        let mut s_nonce = self.numerator;
         loop {
             // check and react to control signals
             match self.operating_state {
@@ -157,36 +165,25 @@ impl Context {
                 return;
             }
 
-            let tx = generate_random_signed_transaction();
-            //generate valid tx
-            //let mut rng = rand::thread_rng();
-            //let parent = self.blockchain.lock().expect("txgenerator error 1").tip();
-            //info!("1:{}",parent);
-            // if self.state.lock().unwrap().check_block(&parent) {
-            //     let current_state = self.state.lock().expect("txgenerator error 2").one_block_state(&parent).clone();
-            //     //info!("2");
-            //     let sender_index:usize = rng.gen_range(0,account_number);
-            //     let pubk:&Ed25519KeyPair = &keypairs[sender_index];
-            //     let sender:H160 = compute_key_hash(pubk.public_key().as_ref().to_vec()).into();
-            //     let (s_nonce, s_amount) = current_state.get(&sender).expect("txgenerator current_state.get(&sender) failed").clone();
-            //     if s_amount<1 {
-            //         continue;
-            //     }
-                
-            //     let mut recv_index:usize = rng.gen_range(0,account_number);
-            //     while recv_index==sender_index {
-            //         recv_index = rng.gen_range(0,account_number);
-            //     }
-            //     let recv = self.accounts[recv_index];
-                
-            //     let value:usize = rng.gen_range(1, s_amount+1);
-            //     let tx = generate_valid_signed_transaction(recv, value, s_nonce+1, &pubk);
+            // let tx = generate_random_signed_transaction();
+            // generate valid tx
+            let mut rng = rand::thread_rng();
+            let (sender_index, recv_index) = (0, 1);
+            let pubk= &self.key_pairs[sender_index];
+            let sender:H160 = compute_key_hash(pubk.public_key().as_ref().to_vec()).into();
+            
+            let recv:H160 = compute_key_hash(self.key_pairs[recv_index].public_key().as_ref().to_vec()).into();
+            
+            let value:usize = rng.gen_range(1, 10000001);
+            let tx = generate_valid_signed_transaction(recv, value, s_nonce, &pubk);
 
             self.mempool.lock().expect("txgenerator error 3").push(tx.clone());
             self.all_txns.lock().expect("txgenerator error 4").insert(tx.clone().hash(), tx.clone());
-            self.server.broadcast(Message::NewTransactionHashes(vec![tx.clone().hash()]));
+            self.server.broadcast(Message::NewTransactionHashes(vec![tx.hash()]));
             // info!("new tx generated:{}",self.mempool.lock().unwrap().len());
             //}
+
+            s_nonce += self.denominator;
 
 
             if let OperatingState::Run(i) = self.operating_state {

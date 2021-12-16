@@ -145,7 +145,7 @@ impl Blockchain {
 				// 	ratio = 0.25;
 				// }
 				let new_diff:H256 = hash_divide_by(&old_diff,ratio);
-				println!("Mining difficulty changes from {} to {}",old_diff, new_diff);
+				debug!("Mining difficulty changes from {} to {}",old_diff, new_diff);
 				new_diff
 			} else {
 				self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty

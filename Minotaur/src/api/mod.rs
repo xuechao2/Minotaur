@@ -1,7 +1,11 @@
 use serde::Serialize;
+use crate::blockchain::Blockchain;
+use crate::crypto::hash::H256;
 use crate::miner::Handle as MinerHandle;
 use crate::staker::Handle as StakerHandle;
 use crate::spv::Handle as SPVHandle;
+use crate::transaction::SignedTransaction;
+use crate::transaction::SpamId;
 //use crate::fly::Handle as FlyHandle;
 use crate::txgenerator::Handle as TxgeneratorHandle;
 use crate::network::server::Handle as NetworkServerHandle;
@@ -9,6 +13,9 @@ use crate::network::message::Message;
 
 use log::info;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use tiny_http::Header;
 use tiny_http::Response;
@@ -23,6 +30,7 @@ pub struct Server {
     network: NetworkServerHandle,
     spv: SPVHandle,
     //fly: FlyHandle
+    blockchain: Arc<Mutex<Blockchain>>,
 }
 
 #[derive(Serialize)]
@@ -44,6 +52,15 @@ macro_rules! respond_result {
     }};
 }
 
+macro_rules! respond_json {
+    ( $req:expr, $message:expr ) => {{
+        let content_type = "Content-Type: application/json".parse::<Header>().unwrap();
+        let resp = Response::from_string(serde_json::to_string(&$message).unwrap())
+            .with_header(content_type);
+        $req.respond(resp).unwrap();
+    }};
+}
+
 impl Server {
     pub fn start(
         addr: std::net::SocketAddr,
@@ -52,6 +69,7 @@ impl Server {
         txgenerator: &TxgeneratorHandle,
         network: &NetworkServerHandle,
         spv: &SPVHandle,
+        blockchain: &Arc<Mutex<Blockchain>>,
         //fly: &FlyHandle,
     ) {
         let handle = HTTPServer::http(&addr).unwrap();
@@ -63,6 +81,7 @@ impl Server {
             network: network.clone(),
             spv: spv.clone(),
             //fly: fly.clone(),
+            blockchain: Arc::clone(blockchain),
         };
         thread::spawn(move || {
             for req in server.handle.incoming_requests() {
@@ -71,6 +90,7 @@ impl Server {
                 let txgenerator = server.txgenerator.clone();
                 let network = server.network.clone();
                 let spv = server.spv.clone();
+                let blockchain = Arc::clone(&server.blockchain);
                 //let fly = server.fly.clone();
                 thread::spawn(move || {
                     // a valid url requires a base
@@ -202,6 +222,38 @@ impl Server {
                             };
                             txgenerator.start(theta);
                             respond_result!(req, true, "ok");
+                        }
+                        "/ledger/txn" => {
+                            let blockchain = blockchain.lock().unwrap();
+                            let pos_blocks = blockchain.get_longest_chain();
+                            let pow_blocks: Vec<H256> = pos_blocks.into_iter().map(|b|b.content.transaction_ref).flatten().collect();
+                            let txns: Vec<Vec<SignedTransaction>> = pow_blocks.into_iter().map(|h|blockchain.find_one_block(&h).unwrap().content.data).collect();
+                            let ids: Vec<Vec<SpamId>> = txns.into_iter().map(|x|x.into_iter().map(|t|(&t).into()).collect()).collect();
+                            // let txns: Vec<Vec<SignedTransaction>> = blocks.into_iter().map(|b|b.content.data).collect();
+                            respond_json!(req, ids);
+                        }
+                        "/ledger/spam" => {
+                            let blockchain = blockchain.lock().unwrap();
+                            let pos_blocks = blockchain.get_longest_chain();
+                            let pow_blocks: Vec<H256> = pos_blocks.into_iter().map(|b|b.content.transaction_ref).flatten().collect();
+                            let txns: Vec<Vec<SignedTransaction>> = pow_blocks.into_iter().map(|h|blockchain.find_one_block(&h).unwrap().content.data).collect();
+                            let ids: Vec<Vec<SpamId>> = txns.into_iter().map(|x|x.into_iter().map(|t|(&t).into()).collect()).collect();
+                            let total_num: usize = ids.iter().map(|v|v.len()).sum();
+                            let unique_set: HashSet<SpamId> = ids.into_iter().flatten().collect();
+                            let unique_num: usize = unique_set.len();
+                            #[derive(Serialize)]
+                            struct SpamReport {
+                                total_txn_num: usize,
+                                unique_txn_num: usize,
+                                meaningful_ratio: f32,
+                                spam_ratio: f32,
+                            }
+                            respond_json!(req, SpamReport {
+                                total_txn_num: total_num,
+                                unique_txn_num: unique_num,
+                                meaningful_ratio: (unique_num as f32)/(total_num as f32),
+                                spam_ratio: 1f32-(unique_num as f32)/(total_num as f32),
+                            });
                         }
                         "/network/ping" => {
                             network.broadcast(Message::Ping(String::from("Test ping")));
