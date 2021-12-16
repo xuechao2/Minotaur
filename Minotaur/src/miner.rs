@@ -413,16 +413,23 @@ mod test {
         let mut spam_recorder = SpamRecorder::new();
         let mut data: Vec<SignedTransaction> = vec![];
         let mut remove_index = vec![];
+        let mut spam_buffer = SpamRecorder::new();
+        let mut last_index = mem_snap.len()-1;
         for (index, txn) in mem_snap.iter().enumerate() {
-            if spam_recorder.test_and_set(txn) {
+            // filter out spam txn
+            if spam_recorder.test(txn) && spam_buffer.test_and_set(txn) {
                 data.push(txn.clone());
                 if data.len() >= txn_number {
+                    last_index = index;
                     break
                 }
             } else {
                 remove_index.push(index);
             }
         }
+        if data.len() >= txn_number {
+            mem_snap.iter().take(last_index+1).for_each(|txn|{spam_recorder.test_and_set(txn);})
+                }
         // remove txn that already recorded (hence is spam)
         for index in remove_index.into_iter().rev() {
             mem_snap.swap_remove(index);
