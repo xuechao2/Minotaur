@@ -38,6 +38,7 @@ enum OperatingState {
 }
 
 pub enum ContextUpdateSignal {
+    // it means external pow block comes
     NewBlock,
 }
 
@@ -140,6 +141,8 @@ impl Context {
     }
 
     fn miner_loop(&mut self) {
+        // add txns from mempool to from a block
+        let txn_number = 32;
         let mut count = 0;
         let mut epoch:u128 = 0;
         let start: time::SystemTime = SystemTime::now();
@@ -148,26 +151,43 @@ impl Context {
         // let vrf_secret_key =
         //    hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
-        macro_rules! handle_context_update {
-            ($blk:expr) => {
+        
+        macro_rules! get_data_from_mempool {
+            () => {
                 {
-                    let mut new_block: bool = false;
-                    for sig in self.context_update_recv.try_iter() {
-                        match sig {
-                            ContextUpdateSignal::NewBlock=> {
-                                new_block = true;
+                    let mut mem_snap = self.mempool.lock().unwrap();
+                    let mut spam_recorder= self.spam_recorder.lock().unwrap();
+                    let mut data: Vec<SignedTransaction> = vec![];
+                    let mut remove_index = vec![];
+                    let mut spam_buffer = SpamRecorder::new();
+                    let mut last_index = mem_snap.len()-1;
+                    for (index, txn) in mem_snap.iter().enumerate() {
+                        // filter out spam txn
+                        if spam_recorder.test(txn) && spam_buffer.test_and_set(txn) {
+                            data.push(txn.clone());
+                            if data.len() >= txn_number {
+                                last_index = index;
+                                break
                             }
+                        } else {
+                            remove_index.push(index);
                         }
                     }
-                    if new_block {
-                        $blk.header.parent = self.blockchain.lock().unwrap().tip();
-                        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-                        $blk.header.pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
-                        $blk.header.pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
-                        $blk.header.timestamp = ts;
+                    if data.len() >= txn_number {
+                        info!("[Spam]Collect {} txns, filter {} spam", data.len(), remove_index.len());
+                        mem_snap.iter().take(last_index+1).for_each(|txn|{spam_recorder.test_and_set(txn);})
+                    }
+                    // remove txn that already recorded (hence is spam)
+                    for index in remove_index.into_iter().rev() {
+                        mem_snap.swap_remove(index);
+                    }
+                    if data.len() >= txn_number {
+                        (true, data)
+                    } else {
+                        (false, vec![])
                     }
                 }
-            };
+            }
         }
         // main mining loop
         loop {
@@ -208,8 +228,6 @@ impl Context {
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let transaction_ref: Vec<H256> = Default::default();
-            // add txns from mempool to from a block
-            let txn_number = 32;
 
             let rand: u128 = Default::default();  // TODO: update rand every epoch
             //let ts_slice = ts.to_be_bytes();
@@ -219,48 +237,31 @@ impl Context {
             let vrf_proof = Default::default();
             let vrf_hash = Default::default();
 
-
-
-            let (enough_txn, data) = {
-                let mut mem_snap = self.mempool.lock().unwrap();
-                let mut spam_recorder= self.spam_recorder.lock().unwrap();
-                let mut data: Vec<SignedTransaction> = vec![];
-                let mut remove_index = vec![];
-                let mut spam_buffer = SpamRecorder::new();
-                let mut last_index = mem_snap.len()-1;
-                for (index, txn) in mem_snap.iter().enumerate() {
-                    // filter out spam txn
-                    if spam_recorder.test(txn) && spam_buffer.test_and_set(txn) {
-                        data.push(txn.clone());
-                        if data.len() >= txn_number {
-                            last_index = index;
-                            break
+            macro_rules! handle_context_update {
+                ($blk:expr) => {
+                    {
+                        let mut new_block: bool = false;
+                        for sig in self.context_update_recv.try_iter() {
+                            match sig {
+                                ContextUpdateSignal::NewBlock=> {
+                                    new_block = true;
+                                }
+                            }
                         }
-                    } else {
-                        remove_index.push(index);
+                        if new_block {
+                            let (enough_txn, data) = get_data_from_mempool!();//TODO add this to handle context update as well!
+                            if !enough_txn {
+                                break;
+                            }
+                            let mt: MerkleTree = MerkleTree::new(&data);
+                            $blk.content.data = data;
+                            $blk.header.merkle_root = mt.root();
+                        }
                     }
-                }
-                if data.len() >= txn_number {
-                    info!("[Spam]Collect {} txns, filter {} spam", data.len(), remove_index.len());
-                    mem_snap.iter().take(last_index+1).for_each(|txn|{spam_recorder.test_and_set(txn);})
-                }
-                // remove txn that already recorded (hence is spam)
-                for index in remove_index.into_iter().rev() {
-                    mem_snap.swap_remove(index);
-                }
-                if data.len() >= txn_number {
-                    (true, data)
-                } else {
-                    (false, vec![])
-                }
-                // let mem_size = mem_snap.len(); 
-                // if mem_size >= txn_number { 
-                //     let data: Vec<SignedTransaction> = mem_snap.iter().take(txn_number).cloned().collect();
-                //     (true, data)
-                // } else {
-                //     (false, vec![])
-                // }
-            };
+                };
+            }
+
+            let (enough_txn, data) = get_data_from_mempool!();//TODO add this to handle context update as well!
 
             if enough_txn {
                 let mut blk = generate_pow_block(&data, &transaction_ref, &parent, rng.gen(), &pow_difficulty, &pos_difficulty, ts, &vrf_proof, &vrf_hash, 

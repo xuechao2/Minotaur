@@ -135,9 +135,8 @@ fn main() {
 
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
-    // create mienr update channels (useless in minotaur, use fake)
-    let (fake_send, _) = channel::unbounded();
-    let fake_recv = channel::never();
+    // create mienr update channels (used to update txn, not update parent)
+    let (context_update_send_pow, context_update_recv_pow) = channel::unbounded();
     // create staker update channels
     let (context_update_send, context_update_recv) = channel::unbounded();
 
@@ -238,6 +237,7 @@ fn main() {
             &state,
             &tranpool,
             context_update_send.clone(),
+            context_update_send_pow.clone(),
         );
         worker_ctx.start();
     }
@@ -259,8 +259,8 @@ fn main() {
     // start the miner
     let (miner_ctx, miner) = miner::new(
         &blockchain,
-        fake_recv,
-        fake_send,
+        context_update_recv_pow,
+        context_update_send_pow,
         &server,
         &mempool,
         &spam_recorder,

@@ -1,5 +1,5 @@
 use crate::crypto::merkle::{MerkleTree, verify};
-use crate::staker;
+use crate::{staker, miner};
 use crate::spam_recorder::SpamRecorder;
 use crate::state::{State,compute_key_hash,transaction_check};
 use crate::transaction::verify_signedtxn;
@@ -44,6 +44,7 @@ pub struct Context {
     state: Arc<Mutex<State>>,
     tranpool: Arc<Mutex<Vec<H256>>>,  
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
+    context_update_send_pow: channel::Sender<miner::ContextUpdateSignal>,
 }
 
 pub fn new(
@@ -60,6 +61,7 @@ pub fn new(
     state: &Arc<Mutex<State>>,
     tranpool: &Arc<Mutex<Vec<H256>>>,
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
+    context_update_send_pow: channel::Sender<miner::ContextUpdateSignal>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -75,6 +77,7 @@ pub fn new(
         state: Arc::clone(state),
         tranpool: Arc::clone(tranpool),
         context_update_send,
+        context_update_send_pow,
     }
 }
 
@@ -303,6 +306,8 @@ impl Context {
                                         self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                     }
                                 }
+                                // tell the miner to update the context
+                                self.context_update_send_pow.send(miner::ContextUpdateSignal::NewBlock).unwrap();
                             }
                         }
 

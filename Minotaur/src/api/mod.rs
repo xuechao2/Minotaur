@@ -13,6 +13,7 @@ use crate::network::message::Message;
 
 use log::info;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -230,6 +231,29 @@ impl Server {
                             let ids: Vec<Vec<SpamId>> = txns.into_iter().map(|x|x.into_iter().map(|t|(&t).into()).collect()).collect();
                             // let txns: Vec<Vec<SignedTransaction>> = blocks.into_iter().map(|b|b.content.data).collect();
                             respond_json!(req, ids);
+                        }
+                        "/ledger/spam" => {
+                            let blockchain = blockchain.lock().unwrap();
+                            let pos_blocks = blockchain.get_longest_chain();
+                            let pow_blocks: Vec<H256> = pos_blocks.into_iter().map(|b|b.content.transaction_ref).flatten().collect();
+                            let txns: Vec<Vec<SignedTransaction>> = pow_blocks.into_iter().map(|h|blockchain.find_one_block(&h).unwrap().content.data).collect();
+                            let ids: Vec<Vec<SpamId>> = txns.into_iter().map(|x|x.into_iter().map(|t|(&t).into()).collect()).collect();
+                            let total_num: usize = ids.iter().map(|v|v.len()).sum();
+                            let unique_set: HashSet<SpamId> = ids.into_iter().flatten().collect();
+                            let unique_num: usize = unique_set.len();
+                            #[derive(Serialize)]
+                            struct SpamReport {
+                                total_txn_num: usize,
+                                unique_txn_num: usize,
+                                meaningful_ratio: f32,
+                                spam_ratio: f32,
+                            }
+                            respond_json!(req, SpamReport {
+                                total_txn_num: total_num,
+                                unique_txn_num: unique_num,
+                                meaningful_ratio: (unique_num as f32)/(total_num as f32),
+                                spam_ratio: 1f32-(unique_num as f32)/(total_num as f32),
+                            });
                         }
                         "/network/ping" => {
                             network.broadcast(Message::Ping(String::from("Test ping")));
