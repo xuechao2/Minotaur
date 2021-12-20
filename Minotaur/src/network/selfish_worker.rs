@@ -330,7 +330,7 @@ impl Context {
                                         txns.iter().for_each(|txn|{spam_recorder.test_and_set(txn);});
                                     }
                                     self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                    if !self.tranpool.lock().unwrap().contains(&hash) && blk.selfish == true{
+                                    if !self.tranpool.lock().unwrap().contains(&hash) && blk.selfish_block == true{
                                         self.tranpool.lock().unwrap().push(hash);
                                     }
 
@@ -381,6 +381,7 @@ impl Context {
                     debug!("Blockchain size {}", self.blockchain.lock().unwrap().get_depth());
 
                     info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
+                    info!("Longest Public Blockchain Length: {}", self.blockchain.lock().unwrap().get_pub_len());
                     info!("Total Number of PoW Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pow());
                     info!("Total Number of PoS Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_pos());
                     // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());

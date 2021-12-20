@@ -50,7 +50,7 @@ impl Blockchain {
     /// Insert a PoS block into blockchain
     pub fn insert_pos(&mut self, block: &Block, selfish: bool) -> bool {
 		//unimplemented!()
-		if selfish {
+		if !selfish {
 			if self.chain.contains_key(&block.hash()) {
 			return false;
 			}

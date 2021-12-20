@@ -24,7 +24,7 @@ use clap::clap_app;
 use crossbeam::channel;
 use log::{error, info};
 use api::Server as ApiServer;
-use network::{server, worker, spv_worker};
+use network::{server, worker, spv_worker, selfish_worker};
 use std::net;
 use std::process;
 use std::thread;
@@ -233,7 +233,7 @@ fn main() {
     //     );
     //     fly_worker_ctx.start();
     } else if selfish_node {
-        let selfish_worker_ctx = worker::new(
+        let selfish_worker_ctx = selfish_worker::new(
             p2p_workers,
             msg_rx,
             &server,

@@ -180,7 +180,7 @@ impl Context {
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();
-            // add txn_blks from tranpool to from a PoS block
+            // add txn_blks from tranpool to form a PoS block
             let txn_block_number = 4;
             let mut enough_txn_block = false;
 
@@ -283,7 +283,7 @@ impl Context {
                             let txn_blocks = block.content.transaction_ref.clone();
                             for txn_block in txn_blocks{
                                 let selfish = self.blockchain.lock().unwrap().find_one_block(&txn_block).unwrap().clone().selfish_block;
-                                if !self.tranpool.lock().unwrap().contains(&txn_block) && (selfish && !self.selfish_staker) {
+                                if !self.tranpool.lock().unwrap().contains(&txn_block) && (selfish || !self.selfish_staker) {
                                     self.tranpool.lock().unwrap().push(txn_block);
                                 }
                             }
@@ -323,8 +323,16 @@ impl Context {
                         // longest chain not change
                         //self.state.lock().unwrap().update_block(&blk);
                         // add txns back to the mempool
-                        //let txns = blk.content.data.clone();
-                        //self.mempool.lock().unwrap().extend(txns);
+                        // let txns = blk.content.data.clone();
+                        // self.mempool.lock().unwrap().extend(txns);
+
+                        // add txn_blocks back to the tranpool
+                        let txn_blocks = blk.content.transaction_ref.clone();
+                            for txn_block in txn_blocks{
+                                if !self.tranpool.lock().unwrap().contains(&txn_block) {
+                                    self.tranpool.lock().unwrap().push(txn_block);
+                                }
+                            }
                     }
 
                     // copy.print_txns();

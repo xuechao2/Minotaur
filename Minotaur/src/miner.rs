@@ -380,21 +380,21 @@ impl Context {
             //         thread::sleep(interval);
             //     }
             // }
-            let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
-            if time > 600 {
-                //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
+            // let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
+            // if time > 600 {
+            //     //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
 
-                //info!("{} seconds elapsed", time);
-                //let rate = 100000/time;
-                //info!("mining rate {} block/s", rate);
-                let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                for blk_hash in longest_chain {
-                    let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
-                    println!("Blockchain timestamps: {}",ts)
-                }
+            //     //info!("{} seconds elapsed", time);
+            //     //let rate = 100000/time;
+            //     //info!("mining rate {} block/s", rate);
+            //     let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+            //     for blk_hash in longest_chain {
+            //         let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
+            //         println!("Blockchain timestamps: {}",ts)
+            //     }
 
-                break;
-            }
+            //     break;
+            // }
         }
     }
 }
