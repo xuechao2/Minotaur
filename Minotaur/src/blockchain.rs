@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 use log::{debug, warn,info};
 use tari_mmr::{MerkleMountainRange, MerkleProof, Hash};
 use sha2::{Digest, Sha256};
+use rand::Rng;
 
 #[derive(Serialize, Deserialize,Hash, Eq, PartialEq, Debug,Clone)]
 pub struct Data {
@@ -24,6 +25,8 @@ pub struct Blockchain {
     epoch_size: u128,
     epoch_time: u128,
     genesis_time: u128,
+    pub_len: u128,
+    private_lead: u128,
 }
 
 impl Blockchain {
@@ -40,38 +43,83 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:400, epoch_time: 120_000_000,genesis_time: initial_time}
+		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:1000, epoch_time: 1200_000_000,genesis_time: initial_time,pub_len: 0, private_lead: 0}
 	
     }
 
     /// Insert a PoS block into blockchain
-    pub fn insert_pos(&mut self, block: &Block) -> bool {
+    pub fn insert_pos(&mut self, block: &Block, selfish: bool) -> bool {
 		//unimplemented!()
-		if self.chain.contains_key(&block.hash()) {
+		if !selfish {
+			if self.chain.contains_key(&block.hash()) {
+			return false;
+			}
+			let header:Header = block.header.clone();
+			let parenthash: H256 = header.parent;
+			let parentdata: Data;
+			match self.chain.get(&parenthash) {
+				Some(data) => parentdata = data.clone(),
+				None => return false,
+			}
+			let parentheight = parentdata.height;
+			let newheight = parentheight+1;
+			let newdata = Data{blk:block.clone(),height:newheight};
+			let newhash = block.hash();
+			let mut new_mmr = self.get_mmr(&parenthash);
+			mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
+			self.chain.insert(newhash,newdata);
+			self.map.insert(newhash, new_mmr);
+			self.num_pos = self.num_pos + 1;
+
+			let mut rng = rand::thread_rng();
+			let p: f64 = rng.gen::<f64>();  // toss a coin
+
+			if newheight > self.depth || (newheight == self.depth && block.selfish_block == true && p < 1.0){
+				self.depth = newheight;
+				self.tip = newhash;
+				return true;
+			} 
+			return false;
+		} else {       /// Insert a block into blockchain as a selfish miner
+			if self.chain.contains_key(&block.hash()) {
+				return false;
+			}
+			let header:Header = block.header.clone();
+			let parenthash: H256 = header.parent;
+			let parentdata: Data;
+			match self.chain.get(&parenthash) {
+				Some(data) => parentdata = data.clone(),
+				None => return false,
+			}
+			let parentheight = parentdata.height;
+			let newheight = parentheight+1;
+			let newdata = Data{blk:block.clone(),height:newheight};
+			let newhash = block.hash();
+			let mut new_mmr = self.get_mmr(&parenthash);
+			mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
+			self.chain.insert(newhash,newdata);
+			self.map.insert(newhash, new_mmr);
+			self.num_pos = self.num_pos + 1;
+			if newheight > self.depth && block.selfish_block == true {
+				self.private_lead = self.private_lead + 1;
+				self.depth = newheight;
+				self.tip = newhash;
+				return true;
+			} else if block.selfish_block == false && newheight > self.pub_len {
+				if self.private_lead >0 {
+					self.private_lead = self.private_lead - 1;
+					self.pub_len = self.pub_len + 1;
+					return false;
+				} else {
+					self.depth = newheight;
+					self.tip = newhash;
+					self.pub_len = newheight;
+					return true;
+				}
+			}
 			return false;
 		}
-		let header:Header = block.header.clone();
-		let parenthash: H256 = header.parent;
-		let parentdata: Data;
-		match self.chain.get(&parenthash) {
-			Some(data) => parentdata = data.clone(),
-			None => return false,
-		}
-		let parentheight = parentdata.height;
-		let newheight = parentheight+1;
-		let newdata = Data{blk:block.clone(),height:newheight};
-		let newhash = block.hash();
-		let mut new_mmr = self.get_mmr(&parenthash);
-		mmr_push_leaf(&mut new_mmr, newhash.as_ref().to_vec().clone());
-		self.chain.insert(newhash,newdata);
-		self.map.insert(newhash, new_mmr);
-		self.num_pos = self.num_pos + 1;
-		if newheight > self.depth {
-			self.depth = newheight;
-			self.tip = newhash;
-			return true;
-		} 
-		return false;
+		
     }
 
     /// Insert a PoW block into blockchain
@@ -184,6 +232,14 @@ impl Blockchain {
 		self.chain.len()
 	}
 
+	pub fn get_pub_len(&self) -> u128 {
+		self.pub_len
+	}
+
+	pub fn get_lead(&self) -> u128 {
+		self.private_lead
+	}
+
 	pub fn get_mmr(&self, hash: &H256) -> MerkleMountainRange<Sha256, Vec<Hash>> {
 		let mmr_ref = self.map.get(hash).unwrap();
 		let leaf_hashes = mmr_ref.get_leaf_hashes(0, mmr_ref.get_leaf_count().unwrap()+1).unwrap().clone();
@@ -228,6 +284,21 @@ impl Blockchain {
 		all_block.reverse();
 		all_block
 	}
+
+	pub fn find_one_height(&self,height:u128) -> H256 {
+		let mut current_hash = self.tip;
+		//let parent_hash: H256 = hash.clone();
+		let mut childdata: Data;
+
+		loop {
+			childdata = self.chain.get(&current_hash).unwrap().clone();
+			if childdata.height == height {
+				return childdata.blk.hash().clone();
+			}
+			current_hash = childdata.blk.header.parent.clone();
+			
+		}
+	}
 	
 	pub fn get_longest_chain(&self) -> Vec<Block> {
 		//unimplemented!()
@@ -255,6 +326,39 @@ impl Blockchain {
 			chain.push(self.find_one_block(&hash).unwrap().clone());
 		}
 		chain
+    }
+
+    pub fn get_chain_quality(&self) -> f32 {
+		//unimplemented!()
+		// let mut all_block : Vec<H256> = vec![];
+		let mut current_hash = self.tip;
+		let mut parentdata: Data;
+		let mut count = 0;
+		let mut count_selfish = 0;
+		let mut all_pow_hash: Vec<H256> = Vec::new();
+
+		loop {
+			match self.chain.get(&current_hash) {
+				None => break,
+				Some(data) => parentdata = data.clone(),
+			}
+			//all_block.push(current_hash);
+			let pow_hashes = parentdata.blk.content.transaction_ref.clone();
+			for pow_hash in pow_hashes{
+                if !all_pow_hash.contains(&pow_hash) {
+                    all_pow_hash.push(pow_hash);
+                    count = count +1;
+                    let pow_block = self.find_one_block(&pow_hash).unwrap().clone();
+                    if pow_block.selfish_block == true {
+                    	count_selfish = count_selfish +1;
+                    }
+                }
+            }
+			
+			current_hash = parentdata.blk.header.parent;			
+		}
+		let chain_quality:f32 = 1.0 - (count_selfish as f32)/(count as f32);
+		chain_quality
     }
 
     pub fn find_one_block(&self,hash: &H256) -> Option<Block> {

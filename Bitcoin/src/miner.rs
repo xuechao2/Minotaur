@@ -287,8 +287,8 @@ impl Context {
                             // longest chain not change
                             //self.state.lock().unwrap().update_block(&blk);
                             // add txns back to the mempool
-                            //let txns = blk.content.data.clone();
-                            //self.mempool.lock().unwrap().extend(txns);
+                            let txns = blk.content.data.clone();
+                            self.mempool.lock().unwrap().extend(txns);
                         }
 
                         self.all_blocks.lock().unwrap().insert(hash, blk);
