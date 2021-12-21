@@ -104,7 +104,7 @@ fn main() {
 
     // init logger
     let verbosity = matches.occurrences_of("verbose") as usize;
-    stderrlog::new().verbosity(verbosity).init().unwrap();
+    stderrlog::new().verbosity(verbosity).timestamp(stderrlog::Timestamp::Second).color(stderrlog::ColorChoice::Never).init().unwrap();
 
     // parse p2p server address
     let p2p_addr = matches
