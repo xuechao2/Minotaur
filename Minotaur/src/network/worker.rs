@@ -45,6 +45,7 @@ pub struct Context {
     tranpool: Arc<Mutex<Vec<H256>>>,  
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
     context_update_send_pow: channel::Sender<miner::ContextUpdateSignal>,
+    artificial_delay: u64,
 }
 
 pub fn new(
@@ -62,7 +63,11 @@ pub fn new(
     tranpool: &Arc<Mutex<Vec<H256>>>,
     context_update_send: channel::Sender<staker::ContextUpdateSignal>,
     context_update_send_pow: channel::Sender<miner::ContextUpdateSignal>,
+    artificial_delay: u64,
 ) -> Context {
+    if artificial_delay>0 {
+        info!("Artificial block propagation delay: {} ms", artificial_delay);
+    }
     Context {
         msg_chan: msg_src,
         num_worker,
@@ -78,6 +83,7 @@ pub fn new(
         tranpool: Arc::clone(tranpool),
         context_update_send,
         context_update_send_pow,
+        artificial_delay,
     }
 }
 
@@ -134,6 +140,9 @@ impl Context {
                         }
                     }
                     if !blocks.is_empty() {
+                        if self.artificial_delay>0 {
+                            std::thread::sleep(std::time::Duration::from_millis(self.artificial_delay));
+                        }
                         peer.write(Message::Blocks(blocks));
                     }
                 }
@@ -167,7 +176,11 @@ impl Context {
                         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros()-blk.header.timestamp;
                         debug!("now {}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros());
                         debug!("ts {}", blk.header.timestamp);
-                        debug!("delay {}", time);
+                        if blk.block_type {
+                            info!("pos block delay {}", time);
+                        } else {
+                            info!("pow block delay {}", time);
+                        }
                         self.delays.lock().unwrap().push(time);
                     	hashes_send.push(blk.hash());
                         queue.push_back(blk);

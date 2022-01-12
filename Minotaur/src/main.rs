@@ -54,6 +54,7 @@ fn main() {
      (@arg txn_numerator: --txnn [usize] default_value("1") "txn generator numerator, range: [0,denominator)" )
      (@arg txn_denominator: --txnd [usize] default_value("1") "txn generator denominator" )
      (@arg selfish_node: --selfish [BOOL] default_value("false") "Whether selfish or honest node") // false for honest node, true for selfish node
+     (@arg artificial_delay: --delay [u64] default_value("0") "artificial delay to propagate blocks" )
     )
     .get_matches();
 
@@ -215,6 +216,14 @@ fn main() {
     //     &server,
     // );
     // fly_ctx.start();
+    let artificial_delay= matches
+        .value_of("artificial_delay")
+        .unwrap()
+        .parse::<u64>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing artificial_delay: {}", e);
+            process::exit(1);
+        });
 
     if spv_client {
         let spv_worker_ctx = spv_worker::new(
@@ -266,6 +275,7 @@ fn main() {
             &tranpool,
             context_update_send.clone(),
             context_update_send_pow.clone(),
+            artificial_delay,
         );
         worker_ctx.start();
     }

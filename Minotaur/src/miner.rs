@@ -145,7 +145,7 @@ impl Context {
 
     fn miner_loop(&mut self) {
         // add txns from mempool to from a block
-        let txn_number = 32;
+        let txn_number = 256;
         let mut count = 0;
         let mut epoch:u128 = 0;
         let start: time::SystemTime = SystemTime::now();
@@ -273,6 +273,8 @@ impl Context {
                     // info!("Start mining!");
                     handle_context_update!(blk); 
                     blk.header.nonce = rng.gen();
+                    // pow block can have real timestamp, for accurate block propagation metrics
+                    blk.header.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
 
                     if blk.hash() <= pow_difficulty {
                         self.blockchain.lock().unwrap().insert_pow(&blk);

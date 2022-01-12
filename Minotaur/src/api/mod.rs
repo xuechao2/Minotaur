@@ -223,6 +223,11 @@ impl Server {
                             txgenerator.start(theta);
                             respond_result!(req, true, "ok");
                         }
+                        "/blockchain/longest-chain" => {
+                            let blockchain = blockchain.lock().unwrap();
+                            let v= blockchain.all_blocks_in_longest_chain();
+                            respond_json!(req, v);
+                        }
                         "/ledger/txn" => {
                             let blockchain = blockchain.lock().unwrap();
                             let pos_blocks = blockchain.get_longest_chain();
