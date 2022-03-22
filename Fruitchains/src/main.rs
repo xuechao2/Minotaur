@@ -7,12 +7,14 @@ pub mod block;
 pub mod blockchain;
 pub mod crypto;
 pub mod miner;
+//pub mod staker;
 pub mod spv;
-pub mod fly;
+//pub mod fly;
 pub mod network;
 pub mod transaction;
 pub mod txgenerator;
 pub mod state;
+pub mod spam_recorder;
 
 use crate::crypto::hash::Hashable;
 use std::collections::{HashMap, HashSet};
@@ -22,7 +24,7 @@ use clap::clap_app;
 use crossbeam::channel;
 use log::{error, info};
 use api::Server as ApiServer;
-use network::{server, worker, spv_worker,selfish_worker};
+use network::{server, worker, spv_worker, selfish_worker};
 use std::net;
 use std::process;
 use std::thread;
@@ -30,13 +32,16 @@ use std::time;
 use crate::crypto::hash::H160;
 use ring::signature::Ed25519KeyPair;
 
+use vrf::openssl::{CipherSuite, ECVRF};
+use vrf::VRF;  
 
+use crate::spam_recorder::SpamRecorder;
 
 fn main() {
     // parse command line arguments
-    let matches = clap_app!(Bitcoin =>
+    let matches = clap_app!(Minotaur =>
      (version: "0.1")
-     (about: "Bitcoin client")
+     (about: "Minotaur client")
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")
@@ -44,9 +49,32 @@ fn main() {
      (@arg p2p_workers: --("p2p-workers") [INT] default_value("4") "Sets the number of worker threads for P2P server")
      (@arg spv_client: --spv [BOOL] default_value("false") "Whether spv client or full node") // false for full node, true for spv client
      //(@arg fly_client: --fly [BOOL] default_value("false") "Whether fly client or full node") // false for full node, true for fly client
+     (@arg vrf_secret_key: --sk [String] "Secret key to be used to print or validate proof" )
+     (@arg initial_time: --ts [u128] "Timestamp of the genesis block" )
+     (@arg txn_numerator: --txnn [usize] default_value("1") "txn generator numerator, range: [0,denominator)" )
+     (@arg txn_denominator: --txnd [usize] default_value("1") "txn generator denominator" )
      (@arg selfish_node: --selfish [BOOL] default_value("false") "Whether selfish or honest node") // false for honest node, true for selfish node
     )
     .get_matches();
+
+    //let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+    // Inputs: Secret Key, Public Key (derived) & Message
+    //let vrf_secret_key = hex::decode(&matches.value_of("vrf_secret_key").unwrap()).unwrap();
+    //let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
+
+    let vrf_secret_key = Default::default();
+    let vrf_public_key = Default::default();
+
+    
+    // let initial_time = matches
+    //     .value_of("initial_time")
+    //     .unwrap()
+    //     .parse::<u128>()
+    //     .unwrap_or_else(|e| {
+    //         error!("Error parsing initial_time: {}", e);
+    //         process::exit(1);
+    //     });
+
 
     let spv_client = matches
         .value_of("spv_client")
@@ -101,12 +129,29 @@ fn main() {
             process::exit(1);
         });
 
+    let txnn= matches
+        .value_of("txn_numerator")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_numerator: {}", e);
+            process::exit(1);
+        });
+    let txnd= matches
+        .value_of("txn_denominator")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_denominator: {}", e);
+            process::exit(1);
+        });
+
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
-    // create mienr update channels
-    let (context_update_send, context_update_recv) = channel::unbounded();
-    // let (selfish_context_update_send, selfish_context_update_recv) = channel::unbounded();
-
+    // create fruit update channels (used to update txn, not update parent)
+    let (fruit_context_update_send, fruit_context_update_recv) = channel::unbounded();
+    // create block update channels
+    let (block_context_update_send, block_context_update_recv) = channel::unbounded();
 
     // start the p2p server
     let (server_ctx, server) = server::new(p2p_addr, msg_tx).unwrap();
@@ -128,25 +173,29 @@ fn main() {
     let mut all_blocks = HashMap::new();
     let mut delays = Vec::new();
     let mut mempool = Vec::new();
+    let mut tranpool = Vec::new();
     let mut all_txns = HashMap::new();
+    let spam_recorder = SpamRecorder::new();
     let mut state = state::State::new();
     let blockchain = Arc::new(std::sync::Mutex::new(blockchain));
     let buffer = Arc::new(std::sync::Mutex::new(buffer));
     let all_blocks = Arc::new(std::sync::Mutex::new(all_blocks));
     let delays = Arc::new(std::sync::Mutex::new(delays));
     let mempool = Arc::new(std::sync::Mutex::new(mempool));
+    let tranpool = Arc::new(std::sync::Mutex::new(tranpool));
     let all_txns = Arc::new(std::sync::Mutex::new(all_txns));
+    let spam_recorder= Arc::new(std::sync::Mutex::new(spam_recorder));
 
     // ico 
-    let ico_account_number = 900;
+    let ico_account_number = 2;
     let keypairs = state::create_ico_keys(ico_account_number);
-    let accounts = state::create_ico_accounts(keypairs);
-    let amount = 10000;
+    // let accounts = state::create_ico_accounts(keypairs);
+    // let amount = 10000;
     //let genesis_block = block::generate_genesis_block();
-    let genesis_block_hash = blockchain.lock().unwrap().tip();
-    state.ico(genesis_block_hash, &accounts, amount);
-    info!("***** State After ICO *****");
-    state.print_last_block_state(&genesis_block_hash);
+    //let genesis_block_hash = blockchain.lock().unwrap().tip();
+    //state.ico(genesis_block_hash, &accounts, amount);
+    //info!("***** State After ICO *****");
+    ///state.print_last_block_state(&genesis_block_hash);
     info!("***************************");
     
 
@@ -197,8 +246,11 @@ fn main() {
             &delays,
             &mempool,
             &all_txns,
+            &spam_recorder,
             &state,
-            context_update_send.clone(),
+            &tranpool,
+            block_context_update_send.clone(),
+            fruit_context_update_send.clone(),
         );
         selfish_worker_ctx.start();
     } else {
@@ -212,8 +264,11 @@ fn main() {
             &delays,
             &mempool,
             &all_txns,
+            &spam_recorder,
             &state,
-            context_update_send.clone(),
+            &tranpool,
+            block_context_update_send.clone(),
+            fruit_context_update_send.clone(),
         );
         worker_ctx.start();
     }
@@ -225,24 +280,48 @@ fn main() {
         &mempool,
         &all_txns,
         &state,
-        //&keypairs,
-        &accounts,
+        keypairs,
+        //&accounts,
+        txnn,
+        txnd,
     );
     txgenerator_ctx.start();
 
     // start the miner
     let (miner_ctx, miner) = miner::new(
         &blockchain,
-        context_update_recv,
-        context_update_send,
+        fruit_context_update_recv,
+        fruit_context_update_send,
+        block_context_update_recv,
+        block_context_update_send,
         &server,
         &mempool,
+        &spam_recorder,
         &state,
         &all_blocks,
+        &tranpool,
+        &vrf_secret_key,
+        &vrf_public_key,
         selfish_node,
     );
     miner_ctx.start();
-   
+
+    // start the staker
+    // let (staker_ctx, staker) = staker::new(
+    //     &blockchain,
+    //     context_update_recv,
+    //     context_update_send,
+    //     &server,
+    //     //&mempool,
+    //     &state,
+    //     &all_blocks,
+    //     &tranpool,
+    //     &vrf_secret_key,
+    //     &vrf_public_key,
+    //     selfish_node,
+
+    // );
+    // staker_ctx.start();
 
     // connect to known peers
     if let Some(known_peers) = matches.values_of("known_peer") {
@@ -280,14 +359,15 @@ fn main() {
 
     // start the API server
     ApiServer::start(
-            api_addr,
-            &miner,
-            &txgenerator,
-            &server,
-            &spv,
-            //&fly,
-        );
-    
+        api_addr,
+        &miner,
+        //&staker,
+        &txgenerator,
+        &server,
+        &spv,
+        &blockchain,
+        //&fly,
+    );
 
     loop {
         std::thread::park();

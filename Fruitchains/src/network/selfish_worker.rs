@@ -1,5 +1,6 @@
 use crate::crypto::merkle::{MerkleTree, verify};
 use crate::miner;
+use crate::spam_recorder::SpamRecorder;
 use crate::state::{State,compute_key_hash,transaction_check};
 use crate::transaction::verify_signedtxn;
 use crate::transaction::SignedTransaction;
@@ -11,7 +12,7 @@ use crossbeam::channel;
 use log::{debug, warn};
 use crate::block::Block;
 use crate::blockchain::{Blockchain,FlyClientProposal,FlyClientProof,FlyClientQuery};
-use crate::crypto::hash::{Hashable, H160, H256};
+use crate::crypto::hash::{Hashable, H160, H256, hash_divide_by};
 use std::collections::VecDeque;
 use std::time::{self, SystemTime, UNIX_EPOCH};
 use serde::{Serialize,Deserialize};
@@ -39,8 +40,11 @@ pub struct Context {
     delays: Arc<Mutex<Vec<u128>>>,
     mempool: Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: Arc<Mutex<HashMap<H256,SignedTransaction>>>,
+    spam_recorder: Arc<Mutex<SpamRecorder>>,
     state: Arc<Mutex<State>>,
-    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
+    tranpool: Arc<Mutex<Vec<H256>>>,  
+    block_context_update_send: channel::Sender<miner::BlockContextUpdateSignal>,
+    fruit_context_update_send: channel::Sender<miner::FruitContextUpdateSignal>,
 }
 
 pub fn new(
@@ -53,8 +57,11 @@ pub fn new(
     time: &Arc<Mutex<Vec<u128>>>,
     mempool: &Arc<Mutex<Vec<SignedTransaction>>>,
     all_txns: &Arc<Mutex<HashMap<H256,SignedTransaction>>>,
+    spam_recorder: &Arc<Mutex<SpamRecorder>>,
     state: &Arc<Mutex<State>>,
-    context_update_send: channel::Sender<miner::ContextUpdateSignal>,
+    tranpool: &Arc<Mutex<Vec<H256>>>,
+    block_context_update_send: channel::Sender<miner::BlockContextUpdateSignal>,
+    fruit_context_update_send: channel::Sender<miner::FruitContextUpdateSignal>,
 ) -> Context {
     Context {
         msg_chan: msg_src,
@@ -66,8 +73,11 @@ pub fn new(
         delays: Arc::clone(time),
         mempool: Arc::clone(mempool),
         all_txns: Arc::clone(all_txns),
+        spam_recorder: Arc::clone(spam_recorder),
         state: Arc::clone(state),
-        context_update_send,
+        tranpool: Arc::clone(tranpool),
+        block_context_update_send,
+        fruit_context_update_send,
     }
 }
 
@@ -134,20 +144,20 @@ impl Context {
                     let mut queue: VecDeque<Block> = VecDeque::new();
                     let mut hashes_send = vec![];
 
-                    //let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
+                    let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
 
                     for blk in blks {
                         //verify txns inside blks
-                        let mut flag = false;
-                        for txn in &blk.content.data {
-                            if !verify_signedtxn(&txn) {
-                                flag = true;
-                                break;
-                            }
-                        }
-                        if flag {
-                            break;
-                        }
+                        // let mut flag = false;
+                        // for txn in &blk.content.data {
+                        //     if !verify_signedtxn(&txn) {
+                        //         flag = true;
+                        //         break;
+                        //     }
+                        // }
+                        // if flag {
+                        //     break;
+                        // }
                         let copy = blk.clone();
                         self.all_blocks.lock().unwrap().insert(copy.hash(), copy);
 
@@ -167,94 +177,183 @@ impl Context {
                     while !queue.is_empty() {
                         let blk = queue.pop_front().unwrap();
                         let parent = blk.header.parent;
-                        // let ts_slice = blk.header.timestamp.to_be_bytes();
-                        // let rand_slice = blk.header.rand.to_be_bytes();
-                        // let message = [rand_slice,ts_slice].concat();
-                        // let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
-                        // let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
+                        let blk_type = blk.block_type;
+                        if blk_type {
+                            //let ts_slice = blk.header.timestamp.to_be_bytes();
+                            //let rand_slice = blk.header.rand.to_be_bytes();
+                            //let message = [rand_slice,ts_slice].concat();
+                            //let vrf_pk: &[u8] = &blk.header.vrf_pub_key;
+                            //let vrf_beta = vrf.verify(&blk.header.vrf_pub_key, &blk.header.vrf_proof, &message);
+                            let mut unknown_hashes: Vec<H256> = Vec::new(); 
+                            
+                            if !self.blockchain.lock().unwrap().contains_hash(&parent) {
+                                unknown_hashes.push(parent);
+                            }
 
-                
-                        if blk.hash() <= blk.header.difficulty { //&& blk.header.difficulty == self.blockchain.lock().unwrap().get_difficulty() {
-                        //&& blk.header.vrf_hash == vrf_beta  {
-                            //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
-                                //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
-                            if self.blockchain.lock().unwrap().contains_hash(&parent) {
-                                let txns = blk.content.data.clone();
-                                // for txn in txns {
-                                //     if !transaction_check(&mut current_state,&txn) {
-                                //         valid =false;
-                                //     }
-                                // }                           
-                                let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                let last_lead = self.blockchain.lock().unwrap().get_lead();
-                                if self.blockchain.lock().unwrap().insert(&blk,true) {
-                                    // tell the miner to update the context
-                                    self.context_update_send.send(miner::ContextUpdateSignal::NewBlock).unwrap();
-
-                                    //self.state.lock().unwrap().update_block(&blk);
-                                    // longest chain changes
-                                    // update the longest chain
-                                    let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                                    // remove the common prefix
-                                    while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
-                                        last_longest_chain.remove(0);
-                                        longest_chain.remove(0);
-                                    }
-                                    // let mut blocks = Vec::new();
-                                    // update the state
-                                    // self.state.lock().unwrap().update_blocks(&blocks);
-                                    
-
-                                    // add txns back to the mempool
-                                    for blk_hash in last_longest_chain {
-                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                                        let txns = block.content.data.clone();
-                                        self.mempool.lock().unwrap().extend(txns);
-
-                                    }
-
-                                    // remove txns from mempool
-                                    for blk_hash in longest_chain {
-                                        let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
-                                        let txns = block.content.data.clone();
-                                        self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
-                                    }
-
-                                } 
-                                let new_lead = self.blockchain.lock().unwrap().get_lead();
-                                let height = self.blockchain.lock().unwrap().get_pub_len();
-                                if new_lead < last_lead {
-                                    let selfish_blk = self.blockchain.lock().unwrap().find_one_height(height);  //TODO: change to search with height
-                                    self.server.broadcast(Message::NewBlockHashes(vec![selfish_blk]));
-
-                                }
-                            } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
-                                let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
-                                self.buffer.lock().unwrap().remove(&parent);
-                                queue.push_back(parent_blk);
-                                queue.push_back(blk);
-                            } else {
-                                let mut flag = false;
-                                for i in 0..queue.len() {
-                                    let block = queue.get(i).unwrap();
-                                    if block.header.hash() == parent {
-                                        flag = true;
-                                        break;
-                                    }
-                                }
-                                // if queue contains the parent
-                                if flag {
-                                    queue.push_back(blk);
-                                } else {
-                                    if !hashes_request.contains(&blk.header.parent) {
-                                        hashes_request.push(blk.header.parent);
-                                    }
-                                    self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                            let txn_blocks = blk.content.transaction_ref.clone();
+                            for txn_block in txn_blocks{
+                                if !self.blockchain.lock().unwrap().contains_hash(&txn_block) {
+                                    unknown_hashes.push(txn_block);
                                 }
                             }
+
+                            //let vrf_hash_bytes: &[u8] = &blk.header.vrf_hash;
+                            //let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
+                            if blk.hash() <= blk.header.difficulty  {
+                                //if self.blockchain.lock().unwrap().contains_hash(&parent) && self.state.lock().unwrap().check_block(&parent) { //blockchain has the parent
+                                    //let mut current_state = self.state.lock().unwrap().one_block_state(&parent).clone();
+                                if unknown_hashes.is_empty() {
+                                    //let txn_blocks = blk.content.transaction_ref.clone();
+                                    let mut last_longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                                    let last_lead = self.blockchain.lock().unwrap().get_lead();
+                                    if self.blockchain.lock().unwrap().insert_block(&blk,true) {
+                                        //self.state.lock().unwrap().update_block(&blk);
+                                        // longest chain changes
+                                        // update the longest chain
+
+                                        // tell the staker to update the context
+                                        self.block_context_update_send.send(miner::BlockContextUpdateSignal::NewBlock).unwrap();
+
+                                        let mut longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+                                        // remove the common prefix
+                                        while last_longest_chain.len()>0 && longest_chain.len()>0 && last_longest_chain[0]==longest_chain[0] {
+                                            last_longest_chain.remove(0);
+                                            longest_chain.remove(0);
+                                        }
+                                        let mut blocks = Vec::new();
+                                        // update the state
+                                        for blk_hash in longest_chain {
+                                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                                            blocks.push(block);
+                                        }
+                                        // self.state.lock().unwrap().update_blocks(&blocks);
+                                        
+
+                                        // add txn_blocks back to the tranpool
+                                        for blk_hash in last_longest_chain {
+                                            let block = self.blockchain.lock().unwrap().find_one_block(&blk_hash).unwrap();
+                                            let txn_blocks = block.content.transaction_ref.clone();
+                                            for txn_block in txn_blocks{
+                                                let selfish = self.blockchain.lock().unwrap().find_one_block(&txn_block).unwrap().clone().selfish_block;
+                                                if !self.tranpool.lock().unwrap().contains(&txn_block) && selfish == true {
+                                                    self.tranpool.lock().unwrap().push(txn_block);
+                                                }
+                                            }
+                                        }
+
+                                        // remove txn_blocks from the tranpool
+                                        for blk in blocks {
+                                            let txn_blocks = blk.content.transaction_ref;
+                                            self.tranpool.lock().unwrap().retain(|txn_block| !txn_blocks.contains(txn_block));
+                                        }                                               
+                                    }
+                                    let new_lead = self.blockchain.lock().unwrap().get_lead();
+                                    let height = self.blockchain.lock().unwrap().get_pub_len();
+                                    if new_lead < last_lead {
+                                        let selfish_blk = self.blockchain.lock().unwrap().find_one_height(height);
+                                        self.server.broadcast(Message::NewBlockHashes(vec![selfish_blk]));
+
+                                    }
+                                // } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
+                                //     let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
+                                //     self.buffer.lock().unwrap().remove(&parent);
+                                //     queue.push_back(parent_blk);
+                                //     queue.push_back(blk);
+                                // } else {
+                                //     let mut flag = false;
+                                //     for i in 0..queue.len() {
+                                //         let block = queue.get(i).unwrap();
+                                //         if block.header.hash() == parent {
+                                //             flag = true;
+                                //             break;
+                                //         }
+                                //     }
+                                //     // if queue contains the parent
+                                //     if flag {
+                                //         queue.push_back(blk);
+                                //     } else {
+                                //         if !hashes_request.contains(&blk.header.parent) {
+                                //             hashes_request.push(blk.header.parent);
+                                //         }
+                                //         self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                //     }
+                                } else {
+                                    let mut blk_into_queue = true;
+                                    for unknown_hash in unknown_hashes {
+                                        if self.buffer.lock().unwrap().contains_key(&unknown_hash) {
+                                            let unknown_blk = self.buffer.lock().unwrap().get(&unknown_hash).unwrap().clone();
+                                            self.buffer.lock().unwrap().remove(&unknown_hash);
+                                            queue.push_back(unknown_blk);
+                                        } else {
+                                            let mut flag = false;
+                                            for i in 0..queue.len() {
+                                                let block = queue.get(i).unwrap();
+                                                if block.header.hash() == unknown_hash {
+                                                    flag = true;
+                                                    break;
+                                                }
+                                            }
+                                            if !flag {
+                                                blk_into_queue = false;
+                                                if !hashes_request.contains(&unknown_hash) {
+                                                hashes_request.push(unknown_hash);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if blk_into_queue {
+                                        queue.push_back(blk);
+                                    } else {
+                                        self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                    }
+                                }
+                            }
+                        } else {
+                            if blk.hash() <= hash_divide_by(&blk.header.difficulty,0.2) {
+                                if self.blockchain.lock().unwrap().contains_hash(&parent) {
+                                    self.blockchain.lock().unwrap().insert_fruit(&blk);
+                                    let txns = blk.content.data.clone();
+                                    let hash = blk.hash().clone();
+                                    {
+                                        let mut spam_recorder = self.spam_recorder.lock().unwrap();
+                                        txns.iter().for_each(|txn|{spam_recorder.test_and_set(txn);});
+                                    }
+                                    self.mempool.lock().unwrap().retain(|txn| !txns.contains(txn));
+                                    if !self.tranpool.lock().unwrap().contains(&hash) && blk.selfish_block == true {
+                                        self.tranpool.lock().unwrap().push(hash);
+                                    }
+
+                                } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent
+                                    let parent_blk = self.buffer.lock().unwrap().get(&parent).unwrap().clone();
+                                    self.buffer.lock().unwrap().remove(&parent);
+                                    queue.push_back(parent_blk);
+                                    queue.push_back(blk);
+                                } else {
+                                    let mut flag = false;
+                                    for i in 0..queue.len() {
+                                        let block = queue.get(i).unwrap();
+                                        if block.header.hash() == parent {
+                                            flag = true;
+                                            break;
+                                        }
+                                    }
+                                    // if queue contains the parent
+                                    if flag {
+                                        queue.push_back(blk);
+                                    } else {
+                                        if !hashes_request.contains(&blk.header.parent) {
+                                            hashes_request.push(blk.header.parent);
+                                        }
+                                        self.buffer.lock().unwrap().insert(blk.hash(), blk);
+                                    }
+                                }
+                                // tell the miner to update the context
+                                self.fruit_context_update_send.send(miner::FruitContextUpdateSignal::NewFruit).unwrap();
+                            }
                         }
-                
+
                     }
+                        
 
                     if !hashes_request.is_empty() {
                         peer.write(Message::GetBlocks(hashes_request));
@@ -272,15 +371,21 @@ impl Context {
 
                     info!("Longest Blockchain Length: {}", self.blockchain.lock().unwrap().get_depth());
                     info!("Longest Public Blockchain Length: {}", self.blockchain.lock().unwrap().get_pub_len());
-                    info!("Total Number of Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_size());
+                    info!("Total Number of Fruits in Blockchain: {}", self.blockchain.lock().unwrap().get_num_fruit());
+                    info!("Total Number of Blocks in Blockchain: {}", self.blockchain.lock().unwrap().get_num_block());
                     // info!("Total Number of Blocks: {}", self.all_blocks.lock().unwrap().len());
 
-                    // let last_block = self.blockchain.lock().unwrap().tip();                    
+                    let last_block = self.blockchain.lock().unwrap().tip();                    
                     info!("Mempool size: {}", self.mempool.lock().unwrap().len());
+                    info!("tranpool size: {}", self.tranpool.lock().unwrap().len());
+
+                    // if self.blockchain.lock().unwrap().get_depth() % 100 == 0 {
+                    //     info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
+                    // }    
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // debug!("Total Block Delay:{}", total_delay);
                     // info!("Avg Block Delay:{}", total_delay/size);
-                    //self.blockchain.lock().unwrap().print_longest_chain();
+                    // self.blockchain.lock().unwrap().print_longest_chain();
                 }
 
 
@@ -318,29 +423,39 @@ impl Context {
 
                 Message::Transactions(txns) => {
                     let mut hashes_send = vec![];
-                    let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
-                    if self.state.lock().unwrap().check_block(&temp_tip) {
-                        let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
-                        for txn in txns {
-                            //if verify_signedtxn(&txn) {
-                            if true {
-                                let copy = txn.clone();
-                                // let pubk = copy.sign.pubk.clone();
-                                // let nonce = copy.transaction.nonce.clone();
-                                // let value = copy.transaction.value.clone();
-
-                                // let sender: H160 = compute_key_hash(pubk).into();
-                                // let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
-                                // if s_nonce < nonce {
-                                //     self.mempool.lock().unwrap().push(copy.clone());
-                                // }
-                                self.all_txns.lock().unwrap().insert(txn.hash(), txn);
-                                // info!("Mempool size: {}", self.mempool.lock().unwrap().len());
-                                hashes_send.push(copy.clone().hash());
-                            }
+                    for txn in txns {
+                        let copy = txn.clone();
+                        self.all_txns.lock().unwrap().insert(txn.hash(), txn);
+                        hashes_send.push(copy.clone().hash());
+                        if!self.mempool.lock().unwrap().contains(&copy) {
+                            self.mempool.lock().unwrap().push(copy.clone());
                         }
-                        self.server.broadcast(Message::NewTransactionHashes(hashes_send));
+
                     }
+
+                    // let temp_tip = self.blockchain.lock().unwrap().tip().clone(); 
+                    // if self.state.lock().unwrap().check_block(&temp_tip) {
+                    //     //let temp_state = self.state.lock().unwrap().one_block_state(&temp_tip).clone();
+                    //     for txn in txns {
+                    //         //if verify_signedtxn(&txn) {
+                    //         if true {
+                    //             let copy = txn.clone();
+                    //             // let pubk = copy.sign.pubk.clone();
+                    //             // let nonce = copy.transaction.nonce.clone();
+                    //             // let value = copy.transaction.value.clone();
+
+                    //             // let sender: H160 = compute_key_hash(pubk).into();
+                    //             // let (s_nonce, s_amount) = temp_state.get(&sender).unwrap().clone();
+                    //             // if s_nonce < nonce {
+                    //             //     self.mempool.lock().unwrap().push(copy.clone());
+                    //             // }
+                    //             self.all_txns.lock().unwrap().insert(txn.hash(), txn);
+                    //             // info!("Mempool size: {}", self.mempool.lock().unwrap().len());
+                    //             hashes_send.push(copy.clone().hash());
+                    //         }
+                    //     }
+                    //     self.server.broadcast(Message::NewTransactionHashes(hashes_send));
+                    // }
 
                 }
 
@@ -377,7 +492,7 @@ impl Context {
 
                                 let mt: MerkleTree = MerkleTree::new(&txns);
                                 let proof = mt.proof(i);
-                                let root = block.header.merkle_root;
+                                let root = block.header.block_merkle_root;
 
                                 peer.write(Message::SPVTxnProof(block_hash, root, txn_hash, proof, i, txn_num));
                                 break;
@@ -414,7 +529,7 @@ impl Context {
                         let proof = mt.proof(random_txn_index);
 
                         let block_hash = block.hash();
-                        let root = block.header.merkle_root;
+                        let root = block.header.block_merkle_root;
 
                         // info!("-------------verification result:{}-------------", verify(&root, &txn_hash, &proof, random_txn_index, txn_num));
 
@@ -462,7 +577,7 @@ impl Context {
                         let txn_proof = mt.proof(txn_sample);
 
                         //let block_hash = block.hash();
-                        let txn_root = block.header.merkle_root;
+                        let txn_root = block.header.block_merkle_root;
 
                         // info!("-------------verification result:{}-------------", verify(&root, &txn_hash, &proof, random_txn_index, txn_num));
 

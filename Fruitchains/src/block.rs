@@ -14,7 +14,7 @@ use log::info;
 pub struct Block {
     pub header: Header,
     pub content: Content,
-    pub block_type: bool,  // true for PoS, false for PoW
+    pub block_type: bool,  // true for block, false for fruit
     pub selfish_block: bool,
 }
 
@@ -22,9 +22,11 @@ pub struct Block {
 pub struct Header {
     pub parent: H256,
     pub nonce: u32,
+    //pub fruit_difficulty: H256,
     pub difficulty: H256,
     pub timestamp: u128,  // TODO: use current time
-    pub merkle_root: H256,
+    pub block_merkle_root: H256,
+    pub fruit_merkle_root: H256,
     //pub mmr_root: Hash,  //ignore this for now
     pub vrf_proof: Vec<u8>,
     pub vrf_hash: Vec<u8>,
@@ -78,10 +80,11 @@ impl Block {
 
 
 
-pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256, 
-                      timestamp: u128, //parent_mmr: &MerkleMountainRange<Sha256, Vec<Hash>>, 
-                      vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, vrf_pub_key: &[u8], rand: u128, selfish_block: bool) -> Block {
-    let mt: MerkleTree = MerkleTree::new(data);
+pub fn generate_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, difficulty: &H256,
+                      timestamp: u128, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
+                      vrf_pub_key: &[u8], rand: u128, selfish_block: bool) -> Block {
+    let block_mt: MerkleTree = MerkleTree::new(transaction_ref);
+    let fruit_mt: MerkleTree = MerkleTree::new(data);
     let block_type = true; 
     let content = Content {
         data: data.to_vec(),
@@ -90,10 +93,12 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
     let header = Header {
         parent: *parent,
         nonce: nonce,
+        //fruit_difficulty: *fruit_difficulty, 
         difficulty: *difficulty, 
         timestamp: timestamp,
-        merkle_root: mt.root(),
-        // mmr_root: parent_mmr.get_merkle_root().unwrap(),
+        block_merkle_root: block_mt.root(),
+        fruit_merkle_root: fruit_mt.root(),
+        //mmr_root: parent_mmr.get_merkle_root().unwrap(),
         vrf_proof: vrf_proof.to_vec(),
         vrf_hash: vrf_hash.to_vec(),
         vrf_pub_key: vrf_pub_key.to_vec(),
@@ -107,6 +112,7 @@ pub fn generate_pow_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
    }
 }
 
+
 pub fn generate_genesis_block() -> Block {
     let content = Content {
         data: Default::default(),
@@ -117,13 +123,14 @@ pub fn generate_genesis_block() -> Block {
     let header = Header {
         parent: Default::default(),
         nonce: Default::default(),
-        //difficulty: <H256>::from([1; 32]), 
+        //pow_difficulty: <H256>::from([1; 32]), 
         difficulty: <H256>::from([
             0, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-        ]),
+        ]), 
         timestamp: Default::default(),
-        merkle_root: Default::default(),
+        block_merkle_root: Default::default(),
+        fruit_merkle_root: Default::default(),
         // mmr_root: MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()).get_merkle_root().unwrap(),
         vrf_proof: Default::default(),
         vrf_hash: Default::default(),

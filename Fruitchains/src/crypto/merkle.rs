@@ -71,6 +71,10 @@ impl MerkleTree {
     }
 
     pub fn root(&self) -> H256 {
+        if self.size == 0 {
+            let h:H256 = Default::default();
+            return h;
+        }
         self.nodes[self.size-1]
     }
 
