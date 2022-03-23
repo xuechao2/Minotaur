@@ -40,10 +40,36 @@ for n in timeline:
 	count_m.append(4*len([i for i in ts_m if i < 1000*n]))
 	expected.append(400)
 
+ts_f = []
+
+file_f = open(f"log_F.txt","r")
+logs=file_f.readlines()
+file_f.close()
+
+for line in logs:
+	split_line = line.strip().split()
+	if len(split_line) == 1:
+		ts_f.append(round(int(split_line[0])/1000))
+start = ts_f[0]
+for i in range(len(ts_f)):
+	ts_f[i] = ts_f[i] - start
+
+timeline = range(600)
+count = []
+count_m = []
+count_f = []
+expected = []
+for n in timeline:
+	count.append(len([i for i in ts if i < 1000*n]))
+	count_m.append(4*len([i for i in ts_m if i < 1000*n]))
+	count_f.append(len([i for i in ts_f if i < 1000*n]))
+	expected.append(400)
+
 
 
 fig, ax = plt.subplots()
 ax.plot(timeline,count,'-b',label='Bitcoin')
+ax.plot(timeline,count_f,'-y',label='Fruitchains')
 ax.plot(timeline,count_m,'-g',label='Minotaur')
 ax.plot(timeline,expected,'--r',label='epoch size')
 ax.set_title("Growth of PoW blocks")

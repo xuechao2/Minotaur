@@ -27,7 +27,7 @@ for n in timeline:
 fig, ax = plt.subplots()
 ax.plot(timeline,count,'-b')
 ax.plot(timeline,expected,'--r',label='epoch size')
-ax.set_title("Chain growth in Bitcoin")
+ax.set_title("Chain growth in Fruitchains")
 ax.set_ylabel('num of blocks')
 ax.set_xlabel('time(s)')
 ax.legend(loc="lower right")

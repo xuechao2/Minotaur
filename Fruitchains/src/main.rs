@@ -39,9 +39,9 @@ use crate::spam_recorder::SpamRecorder;
 
 fn main() {
     // parse command line arguments
-    let matches = clap_app!(Minotaur =>
+    let matches = clap_app!(Fruitchains =>
      (version: "0.1")
-     (about: "Minotaur client")
+     (about: "Fruitchains client")
      (@arg verbose: -v ... "Increases the verbosity of logging")
      (@arg peer_addr: --p2p [ADDR] default_value("127.0.0.1:6000") "Sets the IP address and the port of the P2P server")
      (@arg api_addr: --api [ADDR] default_value("127.0.0.1:7000") "Sets the IP address and the port of the API server")

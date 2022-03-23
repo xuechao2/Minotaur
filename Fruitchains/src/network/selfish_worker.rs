@@ -309,7 +309,7 @@ impl Context {
                                 }
                             }
                         } else {
-                            if blk.hash() <= hash_divide_by(&blk.header.difficulty,0.2) {
+                            if blk.hash() <= hash_divide_by(&blk.header.difficulty,0.4) {
                                 if self.blockchain.lock().unwrap().contains_hash(&parent) {
                                     self.blockchain.lock().unwrap().insert_fruit(&blk);
                                     let txns = blk.content.data.clone();
