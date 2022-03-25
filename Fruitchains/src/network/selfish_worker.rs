@@ -252,6 +252,7 @@ impl Context {
                                     if new_lead < last_lead {
                                         let selfish_blk = self.blockchain.lock().unwrap().find_one_height(height);
                                         self.server.broadcast(Message::NewBlockHashes(vec![selfish_blk]));
+                                        // println!("Broadcast selfish block at height {}", height);
 
                                     }
                                 // } else if self.buffer.lock().unwrap().contains_key(&parent) { // buffer has the parent

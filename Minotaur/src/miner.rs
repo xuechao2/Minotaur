@@ -360,7 +360,9 @@ impl Context {
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
-                        self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        if !self.selfish_miner {
+                            self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        }
                         // in minotaur, context update signal for pow block is useless
                         // self.context_update_send.send(ContextUpdateSignal::NewBlock).unwrap();
                         break;

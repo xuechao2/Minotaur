@@ -156,7 +156,7 @@ impl Context {
     fn miner_loop(&mut self) {
         // add txns from mempool to from a block
         let txn_number = 32;
-        let fruit_number = 2;
+        let fruit_number = 4;
         let mut fruit_count = 0;
         let mut block_count = 0;
         let mut epoch:u128 = 0;
@@ -540,7 +540,9 @@ impl Context {
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
-                        self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        if !self.selfish_miner {
+                            self.server.broadcast(Message::NewBlockHashes(vec![hash]));
+                        }
                         // in minotaur, context update signal for pow block is useless
                         // self.context_update_send.send(FruitContextUpdateSignal::NewFruit).unwrap();
                         break;
@@ -560,22 +562,22 @@ impl Context {
             //         thread::sleep(interval);
             //     }
             // }
-            let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
-            //println!("{}",time);
-            if time > 600 {
-                //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
+            // let time: u64 = SystemTime::now().duration_since(start).unwrap().as_secs();
+            // //println!("{}",time);
+            // if time > 600 {
+            //     //info!("difficulty {}", self.blockchain.lock().unwrap().get_difficulty());
 
-                //info!("{} seconds elapsed", time);
-                //let rate = 100000/time;
-                //info!("mining rate {} block/s", rate);
-                let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
-                for blk_hash in longest_chain {
-                    let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
-                    println!("Blockchain timestamps: {}",ts)
-                }
+            //     //info!("{} seconds elapsed", time);
+            //     //let rate = 100000/time;
+            //     //info!("mining rate {} block/s", rate);
+            //     let longest_chain: Vec<H256> = self.blockchain.lock().unwrap().all_blocks_in_longest_chain();
+            //     for blk_hash in longest_chain {
+            //         let ts = self.blockchain.lock().unwrap().find_one_header(&blk_hash).unwrap().timestamp;
+            //         println!("Blockchain timestamps: {}",ts)
+            //     }
 
-                break;
-            }
+            //     break;
+            // }
         }
     }
 }
