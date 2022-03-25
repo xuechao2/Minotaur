@@ -17,7 +17,7 @@ echo "Wait 5s, then start all threads"
 sleep 5
 curl -s http://127.0.0.1:7000/tx-generator/start?theta=4000 > /dev/null
 curl -s http://127.0.0.1:7000/miner/start?lambda=300 > /dev/null
-curl -s http://127.0.0.1:7000/staker/start?zeta=2000 > /dev/null
+curl -s http://127.0.0.1:7000/staker/start?zeta=3000 > /dev/null
 curl -s http://127.0.0.1:7001/tx-generator/start?theta=4000 > /dev/null
 curl -s http://127.0.0.1:7001/miner/start?lambda=300 > /dev/null
 curl -s http://127.0.0.1:7001/staker/start?zeta=3000 > /dev/null
