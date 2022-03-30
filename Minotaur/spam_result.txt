@@ -1,0 +1,8 @@
+{"total_txn_num":1024,"unique_txn_num":1024,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":2048,"unique_txn_num":2048,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":2048,"unique_txn_num":2048,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":2048,"unique_txn_num":2048,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":8192,"unique_txn_num":8192,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":8192,"unique_txn_num":8192,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":8192,"unique_txn_num":8192,"meaningful_ratio":1.0,"spam_ratio":0.0}
+{"total_txn_num":8192,"unique_txn_num":8192,"meaningful_ratio":1.0,"spam_ratio":0.0}

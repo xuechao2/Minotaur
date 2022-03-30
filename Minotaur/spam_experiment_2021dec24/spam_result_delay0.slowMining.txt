@@ -1,0 +1,4 @@
+{"total_txn_num":559104,"unique_txn_num":557265,"meaningful_ratio":0.99671084,"spam_ratio":0.003289163}
+{"total_txn_num":561152,"unique_txn_num":559313,"meaningful_ratio":0.9967228,"spam_ratio":0.0032771826}
+{"total_txn_num":561152,"unique_txn_num":559313,"meaningful_ratio":0.9967228,"spam_ratio":0.0032771826}
+{"total_txn_num":561152,"unique_txn_num":559313,"meaningful_ratio":0.9967228,"spam_ratio":0.0032771826}

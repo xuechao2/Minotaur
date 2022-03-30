@@ -226,7 +226,8 @@ impl Server {
                         "/blockchain/longest-chain" => {
                             let blockchain = blockchain.lock().unwrap();
                             let v= blockchain.all_blocks_in_longest_chain();
-                            respond_json!(req, v);
+                            let v_string: Vec<String> = v.into_iter().map(|h|h.to_string()).collect();
+                            respond_json!(req, v_string);
                         }
                         "/ledger/txn" => {
                             let blockchain = blockchain.lock().unwrap();
