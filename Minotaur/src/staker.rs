@@ -175,8 +175,14 @@ impl Context {
 
             let mut parent = self.blockchain.lock().unwrap().tip();
             let mut ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let mut pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
-            let mut pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+            let bc = self.blockchain.lock().unwrap();
+            let count_pow_blocks = bc.is_new_epoch_and_count_blocks(ts);
+            if let Some(v) = count_pow_blocks {
+                info!("TODO: process the count of blocks: {:?}",v);
+            }
+            let mut pow_difficulty = bc.get_pow_difficulty(ts);
+            let mut pos_difficulty = bc.get_pos_difficulty();
+            drop(bc);
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();

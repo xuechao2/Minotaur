@@ -212,6 +212,45 @@ impl Blockchain {
 			current_epoch
 		}
 
+	pub fn is_new_epoch_and_count_blocks(&self, current_ts:u128) -> Option<HashMap<Vec<u8>,u64>> {
+			let epoch_size = self.epoch_size;
+			let depth = self.depth;
+			let epoch_time = self.epoch_time;
+			let tip = self.tip;
+			let tip_time = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let genesis_time = self.genesis_time;
+			let tip_epoch = (tip_time - genesis_time)/epoch_time;
+			let curent_epoch = (current_ts - genesis_time)/epoch_time;
+			// if it is new epoch, count last epoch's blocks
+			let mut tip_iter = tip;
+			if curent_epoch > tip_epoch && depth > 1 {
+				let mut cnt= HashMap::new();
+				loop {
+					let b = &self.chain.get(&tip_iter).unwrap().blk;
+					if b.header.timestamp-genesis_time == 0 {
+						break;
+					}
+					let this_epoch = (b.header.timestamp-genesis_time)/epoch_time;
+					if this_epoch!=tip_epoch {
+						break;
+					}
+					for h in  b.content.transaction_ref.iter() {
+						let ref_b = &self.chain.get(h).expect("error, transaction ref is not in blockchain!!!").blk;
+						let miner = ref_b.header.vrf_pub_key.clone();
+						if let Some(u) = cnt.get_mut(&miner) {
+							(*u)+=1;
+						} else {
+							cnt.insert(miner, 1);
+						}
+					}
+					tip_iter = b.header.parent;
+				}
+				return Some(cnt);
+			}
+			// is not new epoch, return none
+			None
+	}
+
 	pub fn get_pos_difficulty(&self) -> H256 {
 		self.chain.get(&self.tip).unwrap().blk.header.pos_difficulty
 	}
