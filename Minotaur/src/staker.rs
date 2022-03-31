@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
 use crate::block::generate_pos_block;
@@ -54,6 +55,7 @@ pub struct Context {
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
     selfish_staker: bool,
+    epoch_block_counts: HashMap<u128,HashMap<Vec<u8>,HashSet<H256>>>,
 }
 
 #[derive(Clone)]
@@ -91,6 +93,7 @@ pub fn new(
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
         selfish_staker: selfish_staker,
+        epoch_block_counts: Default::default(),
     };
 
     let handle = Handle {
@@ -176,10 +179,13 @@ impl Context {
             let mut parent = self.blockchain.lock().unwrap().tip();
             let mut ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
             let bc = self.blockchain.lock().unwrap();
+            let current_epoch = bc.epoch(ts);
+            if !self.epoch_block_counts.contains_key(&current_epoch) {
             let count_pow_blocks = bc.is_new_epoch_and_count_blocks(ts);
             if let Some(v) = count_pow_blocks {
                 info!("TODO: process the count of blocks: {:?}",v);
             }
+        }
             let mut pow_difficulty = bc.get_pow_difficulty(ts);
             let mut pos_difficulty = bc.get_pos_difficulty();
             drop(bc);

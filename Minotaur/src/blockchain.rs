@@ -1,7 +1,7 @@
 use crate::block::generate_genesis_block;
 use crate::block::{Block,Header};
 use crate::crypto::hash::{H256,Hashable,hash_divide_by};
-use std::collections::{HashMap};
+use std::collections::{HashMap,HashSet};
 use serde::{Serialize, Deserialize};
 //use crate::block::generate_random_block;
 use log::{debug, warn,info};
@@ -212,7 +212,7 @@ impl Blockchain {
 			current_epoch
 		}
 
-	pub fn is_new_epoch_and_count_blocks(&self, current_ts:u128) -> Option<HashMap<Vec<u8>,u64>> {
+	pub fn is_new_epoch_and_count_blocks(&self, current_ts:u128) -> Option<HashMap<Vec<u8>,HashSet<H256>>> {
 			let epoch_size = self.epoch_size;
 			let depth = self.depth;
 			let epoch_time = self.epoch_time;
@@ -224,7 +224,7 @@ impl Blockchain {
 			// if it is new epoch, count last epoch's blocks
 			let mut tip_iter = tip;
 			if curent_epoch > tip_epoch && depth > 1 {
-				let mut cnt= HashMap::new();
+				let mut cnt: HashMap<Vec<u8>,HashSet<H256>>= HashMap::new();
 				loop {
 					let b = &self.chain.get(&tip_iter).unwrap().blk;
 					if b.header.timestamp-genesis_time == 0 {
@@ -237,10 +237,12 @@ impl Blockchain {
 					for h in  b.content.transaction_ref.iter() {
 						let ref_b = &self.chain.get(h).expect("error, transaction ref is not in blockchain!!!").blk;
 						let miner = ref_b.header.vrf_pub_key.clone();
-						if let Some(u) = cnt.get_mut(&miner) {
-							(*u)+=1;
+						if let Some(m) = cnt.get_mut(&miner) {
+							m.insert(h.clone());
 						} else {
-							cnt.insert(miner, 1);
+							let mut m = HashSet::new();
+							m.insert(h.clone());
+							cnt.insert(miner, m);
 						}
 					}
 					tip_iter = b.header.parent;
