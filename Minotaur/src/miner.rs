@@ -58,6 +58,7 @@ pub struct Context {
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
     selfish_miner: bool,
+    beta: f64,
 }
 
 #[derive(Clone)]
@@ -79,6 +80,7 @@ pub fn new(
     vrf_secret_key: &Vec<u8>,
     vrf_public_key: &Vec<u8>,
     selfish_miner: bool,
+    beta: f64,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -97,6 +99,7 @@ pub fn new(
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
         selfish_miner: selfish_miner,
+        beta,
     };
 
     let handle = Handle {

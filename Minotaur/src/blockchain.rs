@@ -223,7 +223,7 @@ impl Blockchain {
 			let curent_epoch = (current_ts - genesis_time)/epoch_time;
 			// if it is new epoch, count last epoch's blocks
 			let mut tip_iter = tip;
-			if curent_epoch > tip_epoch && depth > 1 {
+			if curent_epoch > tip_epoch {
 				let mut cnt: HashMap<Vec<u8>,HashSet<H256>>= HashMap::new();
 				loop {
 					let b = &self.chain.get(&tip_iter).unwrap().blk;
