@@ -59,6 +59,7 @@ pub struct Context {
     vrf_public_key: Vec<u8>,
     selfish_miner: bool,
     beta: f64,
+    atttime: u128,
 }
 
 #[derive(Clone)]
@@ -81,6 +82,7 @@ pub fn new(
     vrf_public_key: &Vec<u8>,
     selfish_miner: bool,
     beta: f64,
+    atttime: u128,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -100,6 +102,7 @@ pub fn new(
         vrf_public_key: vrf_public_key.clone(),
         selfish_miner: selfish_miner,
         beta,
+        atttime,
     };
 
     let handle = Handle {
@@ -278,7 +281,7 @@ impl Context {
                     blk.header.nonce = rng.gen();
                     // difficulty_times_beta is used to conveniently change mining power for experiments
                     // if no requirement to change it, just use pow_difficulty
-                    let difficulty_times_beta = hash_divide_by(&pow_difficulty, 1f64/self.beta);
+                    let difficulty_times_beta = hash_multiply_by(&pow_difficulty, self.beta);
                     if blk.hash() <= difficulty_times_beta {
                         self.blockchain.lock().unwrap().insert_pow(&blk);
                         // let copy = blk.clone();
@@ -365,7 +368,8 @@ impl Context {
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
-                        if !self.selfish_miner {
+                        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        if !self.selfish_miner && (self.atttime==0 || self.atttime>ts) {
                             self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                         }
                         // in minotaur, context update signal for pow block is useless

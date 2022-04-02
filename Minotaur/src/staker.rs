@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use crate::crypto::hash::hash_divide_by;
+use crate::crypto::hash::hash_multiply_by;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
 use crate::block::generate_pos_block;
@@ -187,7 +187,7 @@ impl Context {
                 // self.beta is used to conveniently change stake power for experiments
                 // if no requirement to change it, remove self.beta
                 let virtual_pos = self.beta * (self.omega * virtual_stake_fraction + (1f64-self.omega));
-                let virtual_pos_difficulty = hash_divide_by(&pos_difficulty, 1f64/virtual_pos);
+                let virtual_pos_difficulty = hash_multiply_by(&pos_difficulty, virtual_pos);
                 (pow_difficulty, pos_difficulty, virtual_pos_difficulty)
                 }
             }

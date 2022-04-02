@@ -180,8 +180,10 @@ fn main() {
         });
     if atttime > 0 {
         atttime += initial_time;
+        info!("[PrivateAttack?] Attacker, attack time: {}, betas: {}, betaw: {}", atttime, beta_s, beta_w);
+    } else {
+        info!("[PrivateAttack?] Honest, attack time: {}, betas: {}, betaw: {}", atttime, beta_s, beta_w);
     }
-    info!("Attack time: {} (0 is no attack)", atttime);
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels (used to update txn, not update parent)
@@ -338,6 +340,7 @@ fn main() {
         &vrf_public_key,
         selfish_node,
         beta_w,
+        atttime,
     );
     miner_ctx.start();
 
