@@ -5,7 +5,7 @@ use crate::transaction::generate_random_transaction;
 use crate::block::generate_pow_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
-use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash,hash_divide_by};
+use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash,hash_multiply_by};
 use crate::transaction::Transaction;
 use crate::network::server::Handle as ServerHandle;
 use crate::blockchain::Blockchain;
