@@ -180,6 +180,8 @@ impl Context {
                 let pos_difficulty = $bc.get_pos_difficulty();
                 let (_, virtual_stake_fraction)= self.epoch_block_counts.get(&current_epoch).unwrap();
                 // Virtual pos difficulty
+                // self.beta is used to conveniently change stake power for experiments
+                // if no requirement to change it, remove self.beta
                 let virtual_pos = self.beta * (self.omega * virtual_stake_fraction + (1f64-self.omega));
                 let virtual_pos_difficulty = hash_divide_by(&pos_difficulty, 1f64/virtual_pos);
                 (pow_difficulty, pos_difficulty, virtual_pos_difficulty)

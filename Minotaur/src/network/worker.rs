@@ -9,7 +9,7 @@ use super::message::Message;
 use super::peer;
 use crate::network::server::Handle as ServerHandle;
 use crossbeam::channel;
-use log::{debug, warn};
+use log::{debug, warn, error};
 use crate::block::Block;
 use crate::blockchain::{Blockchain,FlyClientProposal,FlyClientProof,FlyClientQuery};
 use crate::crypto::hash::{Hashable, H160, H256};
@@ -302,6 +302,8 @@ impl Context {
                                                 self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                             }
                                         }
+                                    } else {
+                                        error!("BAD BLOCK");
                                     }
                                 }
                                 Err(e) => {
@@ -349,7 +351,10 @@ impl Context {
                                 }
                                 // tell the miner to update the context
                                 self.context_update_send_pow.send(miner::ContextUpdateSignal::NewBlock).unwrap();
+                            } else {
+                                        error!("BAD BLOCK");
                             }
+
                         }
 
                     }

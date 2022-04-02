@@ -5,7 +5,7 @@ use crate::transaction::generate_random_transaction;
 use crate::block::generate_pow_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
-use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};
+use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash,hash_divide_by};
 use crate::transaction::Transaction;
 use crate::network::server::Handle as ServerHandle;
 use crate::blockchain::Blockchain;
@@ -276,8 +276,10 @@ impl Context {
                     // info!("Start mining!");
                     handle_context_update!(blk); 
                     blk.header.nonce = rng.gen();
-
-                    if blk.hash() <= pow_difficulty {
+                    // difficulty_times_beta is used to conveniently change mining power for experiments
+                    // if no requirement to change it, just use pow_difficulty
+                    let difficulty_times_beta = hash_divide_by(&pow_difficulty, 1f64/self.beta);
+                    if blk.hash() <= difficulty_times_beta {
                         self.blockchain.lock().unwrap().insert_pow(&blk);
                         // let copy = blk.clone();
                         count += 1;
