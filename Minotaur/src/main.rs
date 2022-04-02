@@ -57,6 +57,7 @@ fn main() {
      (@arg omega: -w --weight [f64] default_value("0.0") "Omega, the weight of PoW and virtual stake, chosen by developers. ")
      (@arg betas: --betas [f64] default_value("1.0") "beta_s, the stake fraction this node has. set to 1.0 if the experiment is not about attacks")
      (@arg betaw: --betaw [f64] default_value("1.0") "beta_w, the computational power fraction this node has. set to 1.0 if the experiment is not about attacks")
+     (@arg atttime: --atttime [u128] default_value("0") "attack starts from this time (plus genesis time), micro sec, if 0, no attack")
     )
     .get_matches();
 
@@ -169,6 +170,18 @@ fn main() {
             error!("Error parsing betaw: {}", e);
             process::exit(1);
         });
+    let mut atttime = matches
+        .value_of("atttime")
+        .unwrap()
+        .parse::<u128>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_denominator: {}", e);
+            process::exit(1);
+        });
+    if atttime > 0 {
+        atttime += initial_time;
+    }
+    info!("Attack time: {} (0 is no attack)", atttime);
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels (used to update txn, not update parent)
@@ -343,6 +356,7 @@ fn main() {
         selfish_node,
         omega,
         beta_s,
+        atttime,
     );
     staker_ctx.start();
 

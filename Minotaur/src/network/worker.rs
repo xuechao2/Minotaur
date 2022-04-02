@@ -302,8 +302,9 @@ impl Context {
                                                 self.buffer.lock().unwrap().insert(blk.hash(), blk);
                                             }
                                         }
+                                        info!("external valid pos block received");
                                     } else {
-                                        error!("BAD BLOCK");
+                                        error!("bad pos block");
                                     }
                                 }
                                 Err(e) => {

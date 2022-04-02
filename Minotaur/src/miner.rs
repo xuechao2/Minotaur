@@ -223,7 +223,7 @@ impl Context {
 
             let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts,parent);
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
             if current_epoch > epoch {
                 let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;

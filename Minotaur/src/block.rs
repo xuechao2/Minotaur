@@ -82,7 +82,7 @@ impl Block {
 pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H256>, parent: &H256, nonce: u32, pow_difficulty: &H256, pos_difficulty: &H256,
                       timestamp: u128, vrf_proof: &Vec<u8>, vrf_hash: &Vec<u8>, 
                       vrf_pub_key: &[u8], rand: u128, selfish_block: bool) -> Block {
-    let mt: MerkleTree = MerkleTree::new(transaction_ref);
+    // let mt: MerkleTree = MerkleTree::new(transaction_ref);
     let block_type = true; 
     let content = Content {
         data: data.to_vec(),
@@ -94,7 +94,7 @@ pub fn generate_pos_block(data: &Vec<SignedTransaction>, transaction_ref: &Vec<H
         pow_difficulty: *pow_difficulty, 
         pos_difficulty: *pos_difficulty, 
         timestamp: timestamp,
-        merkle_root: mt.root(),
+        merkle_root: Default::default(),//use default instead of merkle tree to avoid merkle tree bug of empty tree
         //mmr_root: parent_mmr.get_merkle_root().unwrap(),
         vrf_proof: vrf_proof.to_vec(),
         vrf_hash: vrf_hash.to_vec(),
