@@ -69,7 +69,7 @@ for n in timeline:
 
 fig, ax = plt.subplots()
 ax.plot(timeline,count,'-b',label='Bitcoin')
-ax.plot(timeline,count_f,'-y',label='Fruitchains')
+ax.plot(timeline,count_f,'-y',label='FruitChain')
 ax.plot(timeline,count_m,'-g',label='Minotaur')
 ax.plot(timeline,expected,'--r',label='epoch size')
 ax.set_title("Growth of PoW blocks")
