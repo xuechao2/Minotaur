@@ -5,7 +5,7 @@ use crate::transaction::generate_random_transaction;
 use crate::block::generate_pow_block;
 use crate::block::{Block, Header, Content};
 use crate::crypto::merkle::MerkleTree;
-use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash};
+use crate::crypto::hash::{H256,H160,Hashable,generate_random_hash,hash_multiply_by};
 use crate::transaction::Transaction;
 use crate::network::server::Handle as ServerHandle;
 use crate::blockchain::Blockchain;
@@ -58,6 +58,8 @@ pub struct Context {
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
     selfish_miner: bool,
+    beta: f64,
+    atttime: u128,
 }
 
 #[derive(Clone)]
@@ -79,6 +81,8 @@ pub fn new(
     vrf_secret_key: &Vec<u8>,
     vrf_public_key: &Vec<u8>,
     selfish_miner: bool,
+    beta: f64,
+    atttime: u128,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -97,6 +101,8 @@ pub fn new(
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
         selfish_miner: selfish_miner,
+        beta,
+        atttime,
     };
 
     let handle = Handle {
@@ -220,7 +226,7 @@ impl Context {
 
             let parent = self.blockchain.lock().unwrap().tip();   //TODO: use a k-deep PoS block as parent instead
             let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
+            let pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts,parent);
             let current_epoch = self.blockchain.lock().unwrap().epoch(ts);
             if current_epoch > epoch {
                 let old_diff = self.blockchain.lock().unwrap().find_one_header(&parent).unwrap().pow_difficulty;
@@ -273,8 +279,10 @@ impl Context {
                     // info!("Start mining!");
                     handle_context_update!(blk); 
                     blk.header.nonce = rng.gen();
-
-                    if blk.hash() <= pow_difficulty {
+                    // difficulty_times_beta is used to conveniently change mining power for experiments
+                    // if no requirement to change it, just use pow_difficulty
+                    let difficulty_times_beta = hash_multiply_by(&pow_difficulty, self.beta);
+                    if blk.hash() <= difficulty_times_beta {
                         self.blockchain.lock().unwrap().insert_pow(&blk);
                         // let copy = blk.clone();
                         count += 1;
@@ -360,7 +368,8 @@ impl Context {
                         info!("Mempool size: {}", self.mempool.lock().unwrap().len());
                         // self.state.lock().unwrap().print_last_block_state(&last_block);
                         //self.blockchain.lock().unwrap().print_longest_chain();
-                        if !self.selfish_miner {
+                        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        if !self.selfish_miner && (self.atttime==0 || self.atttime>ts) {
                             self.server.broadcast(Message::NewBlockHashes(vec![hash]));
                         }
                         // in minotaur, context update signal for pow block is useless

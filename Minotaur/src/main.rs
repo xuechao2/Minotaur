@@ -54,6 +54,10 @@ fn main() {
      (@arg txn_numerator: --txnn [usize] default_value("1") "txn generator numerator, range: [0,denominator)" )
      (@arg txn_denominator: --txnd [usize] default_value("1") "txn generator denominator" )
      (@arg selfish_node: --selfish [BOOL] default_value("false") "Whether selfish or honest node") // false for honest node, true for selfish node
+     (@arg omega: -w --weight [f64] default_value("0.0") "Omega, the weight of PoW and virtual stake, chosen by developers. ")
+     (@arg betas: --betas [f64] default_value("1.0") "beta_s, the stake fraction this node has. set to 1.0 if the experiment is not about attacks")
+     (@arg betaw: --betaw [f64] default_value("1.0") "beta_w, the computational power fraction this node has. set to 1.0 if the experiment is not about attacks")
+     (@arg atttime: --atttime [u128] default_value("0") "attack starts from this time (plus genesis time), micro sec, if 0, no attack")
     )
     .get_matches();
 
@@ -142,7 +146,44 @@ fn main() {
             error!("Error parsing txn_denominator: {}", e);
             process::exit(1);
         });
-
+    let omega = matches
+        .value_of("omega")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing omega: {}", e);
+            process::exit(1);
+        });
+    let beta_s = matches
+        .value_of("betas")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing betas: {}", e);
+            process::exit(1);
+        });
+    let beta_w = matches
+        .value_of("betaw")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing betaw: {}", e);
+            process::exit(1);
+        });
+    let mut atttime = matches
+        .value_of("atttime")
+        .unwrap()
+        .parse::<u128>()
+        .unwrap_or_else(|e| {
+            error!("Error parsing txn_denominator: {}", e);
+            process::exit(1);
+        });
+    if atttime > 0 {
+        atttime += initial_time;
+        info!("[PrivateAttack?] Attacker, attack time: {}, betas: {}, betaw: {}", atttime, beta_s, beta_w);
+    } else {
+        info!("[PrivateAttack?] Honest, attack time: {}, betas: {}, betaw: {}", atttime, beta_s, beta_w);
+    }
     // create channels between server and worker
     let (msg_tx, msg_rx) = channel::unbounded();
     // create mienr update channels (used to update txn, not update parent)
@@ -298,6 +339,8 @@ fn main() {
         &vrf_secret_key,
         &vrf_public_key,
         selfish_node,
+        beta_w,
+        atttime,
     );
     miner_ctx.start();
 
@@ -314,7 +357,9 @@ fn main() {
         &vrf_secret_key,
         &vrf_public_key,
         selfish_node,
-
+        omega,
+        beta_s,
+        atttime,
     );
     staker_ctx.start();
 

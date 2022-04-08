@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
+use crate::crypto::hash::hash_multiply_by;
 use crate::transaction::SignedTransaction;
 use crate::transaction::generate_random_transaction;
 use crate::block::generate_pos_block;
@@ -38,6 +40,7 @@ enum OperatingState {
 
 pub enum ContextUpdateSignal {
     NewPosBlock,
+    AttackerParent(H256),
 }
 pub struct Context {
     /// Channel for receiving control signal
@@ -54,6 +57,10 @@ pub struct Context {
     vrf_secret_key: Vec<u8>,
     vrf_public_key: Vec<u8>,
     selfish_staker: bool,
+    epoch_block_counts: HashMap<u128,(HashMap<Vec<u8>,usize>,f64)>,
+    omega: f64,
+    beta: f64,
+    atttime: u128,
 }
 
 #[derive(Clone)]
@@ -74,6 +81,9 @@ pub fn new(
     vrf_secret_key: &Vec<u8>,
     vrf_public_key: &Vec<u8>,
     selfish_staker: bool,
+    omega: f64,
+    beta: f64,
+    atttime: u128,
 ) -> (Context, Handle) {
     let (signal_chan_sender, signal_chan_receiver) = unbounded();
 
@@ -91,6 +101,10 @@ pub fn new(
         vrf_secret_key: vrf_secret_key.clone(),
         vrf_public_key: vrf_public_key.clone(),
         selfish_staker: selfish_staker,
+        epoch_block_counts: Default::default(),
+        omega,
+        beta,
+        atttime,
     };
 
     let handle = Handle {
@@ -136,8 +150,48 @@ impl Context {
             }
         }
     }
-
+    
     fn staker_loop(&mut self) {
+        // include pow pos and virtual pos
+        macro_rules! calc_difficulties {
+            ($bc:expr, $ts:expr, $parent:expr) => {
+                {
+                let current_epoch = $bc.epoch($ts);
+                if !self.epoch_block_counts.contains_key(&current_epoch) {
+                    let count_pow_blocks = $bc.is_new_epoch_and_count_blocks($ts);
+                    if let Some(v) = count_pow_blocks {
+                        let set_to_count: HashMap<Vec<u8>, usize> = v.into_iter().map(|(k,v)|(k,v.len())).collect();
+                        let self_count = set_to_count.get(&self.vrf_public_key).unwrap_or(&0);
+                        let all_count: usize = {
+                            let x = set_to_count.iter().map(|(_,v)|*v).sum();
+                            if x>0 {
+                                x
+                            } else {
+                                1
+                            }
+                        };
+                        let fraction: f64 = *self_count as f64 / all_count as f64;
+                        info!("[New Epoch] the count of blocks in previous epoch: {:?}",set_to_count);
+                        self.epoch_block_counts.insert(current_epoch, (set_to_count, fraction));
+                    } else if current_epoch == 0 {
+                        // special handling
+                        self.epoch_block_counts.insert(current_epoch, (Default::default(), 1f64));
+                    } else {
+                        panic!("not reach here")
+                    }
+                }
+                let pow_difficulty = $bc.get_pow_difficulty($ts,$parent);
+                let pos_difficulty = $bc.get_pos_difficulty();
+                let (_, virtual_stake_fraction)= self.epoch_block_counts.get(&current_epoch).unwrap();
+                // Virtual pos difficulty
+                // self.beta is used to conveniently change stake power for experiments
+                // if no requirement to change it, remove self.beta
+                let virtual_pos = self.omega * virtual_stake_fraction + self.beta * (1f64-self.omega);
+                let virtual_pos_difficulty = hash_multiply_by(&pos_difficulty, virtual_pos);
+                (pow_difficulty, pos_difficulty, virtual_pos_difficulty)
+                }
+            }
+        }
         let mut count = 0;
         let start: time::SystemTime = SystemTime::now();
         let mut vrf = ECVRF::from_suite(CipherSuite::SECP256K1_SHA256_TAI).unwrap();
@@ -145,7 +199,10 @@ impl Context {
         // let vrf_secret_key =
         //     hex::decode("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721").unwrap();   //TODO: use different vrf key pairs in different nodes
         // let vrf_public_key = vrf.derive_public_key(&vrf_secret_key).unwrap();
-        
+        let bc = self.blockchain.lock().unwrap();
+        let mut parent = bc.tip();
+        let mut parent_depth = bc.get_depth();
+        drop(bc);
         // main mining loop
         loop {
             // check and react to control signals
@@ -173,15 +230,16 @@ impl Context {
             // TODO: actual mining
 
 
-            let mut parent = self.blockchain.lock().unwrap().tip();
+            // parent = self.blockchain.lock().unwrap().tip();
             let mut ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-            let mut pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
-            let mut pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+            let bc = self.blockchain.lock().unwrap();
+            let (mut pow_difficulty, mut pos_difficulty, mut virtual_pos_difficulty) = calc_difficulties!(bc, ts, parent);
+            drop(bc);
             //let parent_mmr = self.blockchain.lock().unwrap().get_mmr(&parent);
             let mut rng = rand::thread_rng();
             let mut data: Vec<SignedTransaction> = Default::default();
             // add txn_blks from tranpool to form a PoS block
-            let txn_block_number = 4;
+            let txn_block_number = 32;
             let mut enough_txn_block = false;
 
             let mut transaction_ref: Vec<H256> = Vec::new();
@@ -216,24 +274,52 @@ impl Context {
                 }
             }
 
-            if enough_txn_block {
+            if enough_txn_block || true {
                 // info!("Start mining!");
 
                 // update context
                 {
                     let mut new_block: bool = false;
+                    let mut attacker_update_parent = None;
                     for sig in self.context_update_recv.try_iter() {
                         match sig {
                             ContextUpdateSignal::NewPosBlock=> {
                                 new_block = true;
                             }
+                            ContextUpdateSignal::AttackerParent(h) => {
+                                attacker_update_parent = Some(h);
+                            }
                         }
                     }
                     if new_block {
-                        parent = self.blockchain.lock().unwrap().tip();
                         ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
-                        pow_difficulty = self.blockchain.lock().unwrap().get_pow_difficulty(ts);
-                        pos_difficulty = self.blockchain.lock().unwrap().get_pos_difficulty();
+                        if self.atttime==0 || ts < self.atttime {
+                            let bc = self.blockchain.lock().unwrap();
+                            parent = bc.tip();
+                            parent_depth = bc.get_depth();
+                            let tmp = calc_difficulties!(bc, ts, parent);
+                            drop(bc);
+                            pow_difficulty = tmp.0;
+                            pos_difficulty = tmp.1;
+                            virtual_pos_difficulty = tmp.2;
+                            rand = Default::default();  // TODO: update rand every epoch
+                            let ts_slice = ts.to_be_bytes();
+                            let rand_slice = rand.to_be_bytes();
+                            let message = [rand_slice,ts_slice].concat();
+                            // VRF proof and hash output
+                            vrf_proof = vrf.prove(&self.vrf_secret_key, &message).unwrap();
+                            vrf_hash = vrf.proof_to_hash(&vrf_proof).unwrap();
+                        }
+                    }
+                    if let Some(h) = attacker_update_parent {
+                        parent = h;
+                        let bc = self.blockchain.lock().unwrap();
+                        parent_depth = bc.find_one_depth(&parent).expect("cannot find parent in blockchain!");
+                        let tmp = calc_difficulties!(bc, ts, parent);
+                        drop(bc);
+                        pow_difficulty = tmp.0;
+                        pos_difficulty = tmp.1;
+                        virtual_pos_difficulty = tmp.2;
                         rand = Default::default();  // TODO: update rand every epoch
                         let ts_slice = ts.to_be_bytes();
                         let rand_slice = rand.to_be_bytes();
@@ -248,8 +334,8 @@ impl Context {
                 let vrf_hash_bytes: &[u8] = &vrf_hash;
                 let vrf_hash_sha256: H256 = ring::digest::digest(&ring::digest::SHA256, vrf_hash_bytes).into();
                 //info!("Vrf: {}",vrf_hash_sha256);
-                //info!("Target: {}",pos_difficulty);
-                if vrf_hash_sha256 <= pos_difficulty {    //TODO: change to PoS mining             
+                if vrf_hash_sha256 <= virtual_pos_difficulty {    //TODO: change to PoS mining             
+                    info!("Virtual diff: {}, PoS diff: {}",virtual_pos_difficulty,pos_difficulty);
                     let copy = blk.clone();
                     count += 1;
                     info!("Mined {} PoS blocks!", count);
@@ -346,13 +432,19 @@ impl Context {
                     info!("Tranpool size: {}", self.tranpool.lock().unwrap().len());
                     // self.state.lock().unwrap().print_last_block_state(&last_block);
                     // self.blockchain.lock().unwrap().print_longest_chain();
-                    if !self.selfish_staker {
+                    ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                    if !self.selfish_staker && (self.atttime == 0 || self.atttime > ts) {
                         self.server.broadcast(Message::NewBlockHashes(vec![blk.hash()]));
                         if self.blockchain.lock().unwrap().get_depth() % 100 == 0 {
                             info!("Chain quality: {}", self.blockchain.lock().unwrap().get_chain_quality());
                         }
+                    } else {
+                        self.context_update_send.send(ContextUpdateSignal::AttackerParent(blk.hash())).unwrap();
+                        info!("[PrivateAttack] generate a block with parent height: {}", parent_depth)
                     }
-                    self.context_update_send.send(ContextUpdateSignal::NewPosBlock).unwrap();
+                    if self.atttime == 0 || self.atttime > ts {
+                        self.context_update_send.send(ContextUpdateSignal::NewPosBlock).unwrap();
+                    }
                     //break;
                 }
             }

@@ -1,7 +1,7 @@
 use crate::block::generate_genesis_block;
 use crate::block::{Block,Header};
 use crate::crypto::hash::{H256,Hashable,hash_divide_by};
-use std::collections::{HashMap};
+use std::collections::{HashMap,HashSet};
 use serde::{Serialize, Deserialize};
 //use crate::block::generate_random_block;
 use log::{debug, warn,info};
@@ -43,7 +43,7 @@ impl Blockchain {
 		map.insert(hash, MerkleMountainRange::<Sha256, Vec<Hash>>::new(Vec::new()));
 		let tip:H256 = hash;
 		//info!("0:{}",tip);
-		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:1000, epoch_time: 1200_000_000,genesis_time: initial_time,pub_len: 0, private_lead: 0}
+		Blockchain{chain, map, tip, depth:0, num_pos:0, num_pow:0, epoch_size:400, epoch_time: 120_000_000,genesis_time: initial_time,pub_len: 0, private_lead: 0}
 	
     }
 
@@ -154,19 +154,17 @@ impl Blockchain {
 		self.tip
 	}
 	
-	pub fn get_pow_difficulty(&self, current_ts:u128) -> H256 {
+	pub fn get_pow_difficulty(&self, current_ts:u128, parent: H256) -> H256 {
 			let epoch_size = self.epoch_size;
 			let depth = self.depth;
 			let epoch_time = self.epoch_time;
-			let tip = self.tip;
-			let tip_time = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let parent_time = self.chain.get(&parent).unwrap().blk.header.timestamp;
 			let genesis_time = self.genesis_time;
-			let tip_epoch = (tip_time - genesis_time)/epoch_time;
+			let parent_epoch = (parent_time - genesis_time)/epoch_time;
 			let curent_epoch = (current_ts - genesis_time)/epoch_time;
-			if curent_epoch > tip_epoch && depth > 1 {
-				let old_diff: H256 = self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty;
-				//let end_time: u128 = self.chain.get(&tip).unwrap().blk.header.timestamp;
-				let mut hash = tip.clone();
+			if curent_epoch > parent_epoch && depth > 1 {
+				let old_diff: H256 = self.chain.get(&parent).unwrap().blk.header.pow_difficulty;
+				let mut hash = parent.clone();
 				let mut all_hashs = Vec::new(); 
 				while true {
 					let blk = self.chain.get(&hash).unwrap().blk.clone();
@@ -179,7 +177,7 @@ impl Blockchain {
 					hash = self.chain.get(&hash).unwrap().blk.header.parent;
 					let blk_time = self.chain.get(&hash).unwrap().blk.header.timestamp;
 					let blk_epoch = (blk_time - genesis_time)/epoch_time;
-					if blk_epoch < tip_epoch || blk_time == self.genesis_time {
+					if blk_epoch < parent_epoch || blk_time == self.genesis_time {
 						break;
 					}
 				}
@@ -196,7 +194,7 @@ impl Blockchain {
 				debug!("Mining difficulty changes from {} to {}",old_diff, new_diff);
 				new_diff
 			} else {
-				self.chain.get(&self.tip).unwrap().blk.header.pow_difficulty
+				self.chain.get(&parent).unwrap().blk.header.pow_difficulty
 			}
 	}
 
@@ -212,7 +210,49 @@ impl Blockchain {
 			current_epoch
 		}
 
+	pub fn is_new_epoch_and_count_blocks(&self, current_ts:u128) -> Option<HashMap<Vec<u8>,HashSet<H256>>> {
+			let epoch_size = self.epoch_size;
+			let depth = self.depth;
+			let epoch_time = self.epoch_time;
+			let tip = self.tip;
+			let tip_time = self.chain.get(&tip).unwrap().blk.header.timestamp;
+			let genesis_time = self.genesis_time;
+			let tip_epoch = (tip_time - genesis_time)/epoch_time;
+			let curent_epoch = (current_ts - genesis_time)/epoch_time;
+			// if it is new epoch, count last epoch's blocks
+			let mut tip_iter = tip;
+			if curent_epoch > tip_epoch {
+				let mut cnt: HashMap<Vec<u8>,HashSet<H256>>= HashMap::new();
+				loop {
+					let b = &self.chain.get(&tip_iter).unwrap().blk;
+					if b.header.timestamp-genesis_time == 0 {
+						break;
+					}
+					let this_epoch = (b.header.timestamp-genesis_time)/epoch_time;
+					if this_epoch!=tip_epoch {
+						break;
+					}
+					for h in  b.content.transaction_ref.iter() {
+						let ref_b = &self.chain.get(h).expect("error, transaction ref is not in blockchain!!!").blk;
+						let miner = ref_b.header.vrf_pub_key.clone();
+						if let Some(m) = cnt.get_mut(&miner) {
+							m.insert(h.clone());
+						} else {
+							let mut m = HashSet::new();
+							m.insert(h.clone());
+							cnt.insert(miner, m);
+						}
+					}
+					tip_iter = b.header.parent;
+				}
+				return Some(cnt);
+			}
+			// is not new epoch, return none
+			None
+	}
+
 	pub fn get_pos_difficulty(&self) -> H256 {
+		// should be parent, but it's okay since all pos are the same
 		self.chain.get(&self.tip).unwrap().blk.header.pos_difficulty
 	}
 	
@@ -372,6 +412,12 @@ impl Blockchain {
     	match self.chain.get(&hash) {
 			None => return None,
 			Some(data) => return Some(data.blk.header.clone()),
+		}
+    }
+    pub fn find_one_depth(&self,hash: &H256) -> Option<u128> {
+    	match self.chain.get(&hash) {
+			None => return None,
+			Some(data) => return Some(data.height),
 		}
     }
 }
