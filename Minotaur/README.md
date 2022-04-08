@@ -20,3 +20,5 @@ Start mining:
 Start staking:
 `sh start_staking.sh`
 
+## Experiments and results
+See `experiments/`
