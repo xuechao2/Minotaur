@@ -4,7 +4,7 @@ Welcome! This is the repository for the implementation of the Minotaur consensus
 
 ## Paper
 
-__Minotaur: Multi-Resource Blockchain Consensus__
+__[Minotaur](https://arxiv.org/pdf/2201.11780.pdf): Multi-Resource Blockchain Consensus__ (to appear in ACM CCS 2022)
 
 ## Build
 
